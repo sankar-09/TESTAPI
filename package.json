@@ -5,7 +5,8 @@
   "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/app.js"
+    "start": "node dist/app.js",
+    "prestartt": "npm run build"
   },
   "dependencies": {
     "@types/node": "^22.15.14",

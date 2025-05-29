@@ -93,7 +93,7 @@ class UserController {
         SELECT U.USER_ID, U.NAME, U.EMAIL, R.ROLE_NAME 
         FROM USERS U 
         LEFT JOIN ROLES R ON R.ROLE_ID = U.ROLE 
-        WHERE U.EMAIL = ? AND U.PASSWORD = ?
+        WHERE U.EMAIL = ? AND U.PASSWORD = ? AND U.STATUS='A'
       `;
       const params = [input.email, input.password];
 

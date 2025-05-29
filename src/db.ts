@@ -11,7 +11,9 @@ const MYSQL_CONFIG = {
   password: "Locate@2025",
   database: "u303037170_projectadmin",
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 1000,
+   enableKeepAlive: true, // important
+  
 };
 export const pool = mysql.createPool(MYSQL_CONFIG);
 
