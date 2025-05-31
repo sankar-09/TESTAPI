@@ -12,8 +12,7 @@ const MYSQL_CONFIG = {
   database: "u303037170_projectadmin",
   waitForConnections: true,
   connectionLimit: 1000,
-   enableKeepAlive: true, // important
-  
+  enableKeepAlive: true, // important
 };
 export const pool = mysql.createPool(MYSQL_CONFIG);
 
@@ -28,10 +27,9 @@ const transport = new DailyRotateFile({
   dirname: logsDir,
   filename: "logs_%DATE%.log",
   datePattern: "DD-MM-YYYY",
-  maxSize: process.env.LOG_MAX_SIZE || "300m",  // Use lower-case if necessary, or "10240"
+  maxSize: process.env.LOG_MAX_SIZE || "300m",
   maxFiles: process.env.LOG_MAX_FILES || "1d",
   zippedArchive: false,
-  // Optionally, enable auditing to track rotations
   auditFile: path.join(logsDir, ".audit.json"),
 });
 
@@ -55,7 +53,39 @@ function logToFile(data: {
   logger.info(data);
 }
 
-// Query executor
+/**
+ * A safe query executor that wraps the connection.execute call.
+ * On ECONNRESET errors, it retries once, and for other errors logs them.
+ */
+async function safeExecute(
+  conn: PoolConnection,
+  query: string,
+  params: any[]
+): Promise<any> {
+  try {
+    const [result] = await conn.execute(query, params);
+    return result;
+  } catch (err: any) {
+    if (err.code === "ECONNRESET") {
+      logger.warn("Retrying query inside transaction due to ECONNRESET...");
+      // Retry once. Caution: Non-idempotent queries require extra care.
+      const [result] = await conn.execute(query, params);
+      return result;
+    }
+    // Capture and log error details.
+    logger.error({
+      message: `Error in safeExecute: ${err.toString()}`,
+      query,
+      params,
+    });
+    throw err;
+  }
+}
+
+/**
+ * Query executor that supports transactions and uses safeExecute
+ * to handle transient errors.
+ */
 export async function executeDbQuery(
   query: string,
   params: any[],
@@ -77,7 +107,8 @@ export async function executeDbQuery(
       }
     }
 
-    const [result] = await conn.execute(query, params);
+    // Use safeExecute helper rather than a non-existent connection method.
+    const result = await safeExecute(conn, query, params);
 
     // Commit only if we started the transaction ourselves.
     if (localConnection && useTransaction) {
@@ -121,6 +152,4 @@ export async function executeDbQuery(
   }
 }
 
-
-// Export the logger for use in other parts of your application
 export { logger };
