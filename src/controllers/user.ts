@@ -4,6 +4,7 @@ import { request } from "http";
 import { uploadImage } from "../utils/cloudinaryUtil";
 import  jwt  from "jsonwebtoken";
 import { authenticateToken } from "../middleWare/authMiddleWare";
+import { sendEmail } from "../utils/emailservice";
 
 //token
 // const secretKey =(process.env.ACCESS_TOKEN_KEY as string) || "'your_secret_key";
@@ -182,6 +183,24 @@ class UserController {
       
     const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
     await connection.commit();
+  //send mail to user
+   try {
+        await sendEmail(
+          input.EMAIL,
+          "Welcome to Our Locate App Services",
+          "welcome",
+          {
+            name: input.NAME,
+            email: input.EMAIL,
+          }
+        );
+        
+        // res.json("email sent successfullys");
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+        res.json("email not sent");
+      }
+
     const results = {message: "User created", userId: newUserId, affectedRows: result.affectedRows}
     res.json({ status: 0, result:results });  
   } catch (err: any) {
