@@ -19,7 +19,7 @@ const handlebarOptions = {
   viewEngine: create({
     extname: ".hbs",
     partialsDir: path.resolve("./src/template/"),
-    defaultLayout: false,
+    // defaultLayout: false,
   }),
   viewPath: path.resolve("./src/template/"),
   extName: ".hbs",

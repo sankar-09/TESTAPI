@@ -26,7 +26,7 @@ export default class JobsController {
       await connection.beginTransaction();
 
       // Duplicate check: Ensure that a job with the same COMP_NM and DESCRIPTION does not exist.
-      const dupQuery = `SELECT COUNT(*) as count FROM JOBS WHERE COMP_NM = ? AND JOB_TITLE = ?`;
+      const dupQuery = `SELECT COUNT(COMP_NM) as count FROM JOBS WHERE COMP_NM = ? AND JOB_TITLE = ?`;
       const dupResult = await executeDbQuery(dupQuery, [input.COMP_NM, input.JOB_TITLE], false, apiName, port, connection);
       if (Number(dupResult[0]?.count) > 0) {
         await connection.rollback();

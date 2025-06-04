@@ -135,7 +135,7 @@ class UserController {
     connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      const chekdup = `SELECT COUNT(*) as count FROM USERS WHERE EMAIL = ? AND PASSWORD = ? AND USER_ID = ?`;
+      const chekdup = `SELECT COUNT(EMAIL) as count FROM USERS WHERE EMAIL = ? AND PASSWORD = ? AND USER_ID = ?`;
           const dupResult = await executeDbQuery(chekdup, [input.EMAIL, input.OLD_PASSWORD, userId], false, apiName, port, connection);
           if (Number(dupResult[0]?.count) == 0) {
               await connection.rollback();
@@ -164,7 +164,7 @@ class UserController {
     connection = await pool.getConnection();
     await connection.beginTransaction();
     
-      const chekdup = ` SELECT COUNT(*) as count FROM USERS WHERE EMAIL=? AND MOBILE_NUMBER=?`;
+      const chekdup = ` SELECT COUNT(EMAIL) as count FROM USERS WHERE EMAIL=? AND MOBILE_NUMBER=?`;
           const dupResult = await executeDbQuery(chekdup, [input.EMAIL, input.MOBILE_NUMBER], false, apiName, port, connection);
           if (Number(dupResult[0]?.count) > 0) {
               await connection.rollback();
@@ -338,7 +338,7 @@ class UserController {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-          const chekdup = ` SELECT COUNT(*) as count FROM ROLES WHERE ROLE_NAME=? AND DESCRIPTION=?`;
+          const chekdup = ` SELECT COUNT(ROLE_NAME) as count FROM ROLES WHERE ROLE_NAME=? AND DESCRIPTION=?`;
           const dupResult = await executeDbQuery(chekdup, [input.ROLE_NAME, input.DESCRIPTION], false, apiName, port, connection);
           if (Number(dupResult[0]?.count) > 0) {
               await connection.rollback();

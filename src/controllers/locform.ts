@@ -25,7 +25,7 @@ export default class NearLocationController {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      const checkDup = `SELECT COUNT(*) AS count FROM NEAR_LOCATION WHERE LOCAT_NAME = ? AND OVERVIEW = ?`;
+      const checkDup = `SELECT COUNT(LOCAT_NAME) AS count FROM NEAR_LOCATION WHERE LOCAT_NAME = ? AND OVERVIEW = ?`;
       const dupResult = await executeDbQuery(checkDup, [input.LOCAT_NAME, input.OVERVIEW], false, apiName, port, connection);
       if (Number(dupResult[0]?.count) > 0) {
         await connection.rollback();

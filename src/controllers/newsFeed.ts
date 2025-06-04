@@ -27,7 +27,7 @@ export default class NewsFeedController {
     await connection.beginTransaction();
 
     // Duplicate check: count rows where FEED_HEAD and FEED_MATTER match.
-    const chekdup = `SELECT COUNT(*) as count FROM NEWS_FEED WHERE FEED_HEAD=? AND FEED_MATTER=?`;
+    const chekdup = `SELECT COUNT(FEED_HEAD) as count FROM NEWS_FEED WHERE FEED_HEAD=? AND FEED_MATTER=?`;
     const dupResult = await executeDbQuery(chekdup, [input.FEED_HEAD, input.FEED_MATTER], false, apiName, port, connection);
     if (Number(dupResult[0]?.count) > 0) {
       await connection.rollback();

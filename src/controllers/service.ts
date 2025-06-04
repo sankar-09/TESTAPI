@@ -29,12 +29,11 @@ export default class ServiceController {
 
     
   }
-  async Servicesnames(req: Request, res: Response) {
+  
+  async Servicesnames(req: Request, res: Response): Promise<void> {
     const apiName = "service/Servicesnames";
     const port = req.socket.localPort!;
-    // console.log('headers is',headers);
-    
-    const query = ` SELECT  ID, NAME FROM SERVICES Where Status ='A' `;
+    const query = `SELECT ID, NAME FROM SERVICES WHERE Status = 'A'`;
 
     try {
       const rows = await executeDbQuery(query, [], false, apiName, port);
@@ -43,6 +42,7 @@ export default class ServiceController {
       res.json({ status: 1, result: err.toString() });
     }
   }
+
  async SubServicesnames(req: Request, res: Response) {
     const apiName = "subservice/SubServicesnames";
     const port = req.socket.localPort!;
@@ -69,7 +69,7 @@ export default class ServiceController {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      const chekdup = ` SELECT COUNT(*) as count FROM SERVICES WHERE NAME=? AND DESCRIPTION=?`;
+      const chekdup = ` SELECT COUNT(NAME) as count FROM SERVICES WHERE NAME=? AND DESCRIPTION=?`;
         const dupResult = await executeDbQuery(chekdup, [input.NAME, input.DESCRIPTION], false, apiName, port, connection);
         if (Number(dupResult[0]?.count) > 0) {
             await connection.rollback();
@@ -164,7 +164,7 @@ export default class ServiceController {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      const checkDup = await executeDbQuery("SELECT COUNT(*) as count FROM SUB_SERVICES WHERE NAME = ? AND SERVICE_ID = ?", [input.NAME, input.ServiceID], false, apiName, port, connection);
+      const checkDup = await executeDbQuery("SELECT COUNT(NAME) as count FROM SUB_SERVICES WHERE NAME = ? AND SERVICE_ID = ?", [input.NAME, input.ServiceID], false, apiName, port, connection);
       if (Number(checkDup[0]?.count) > 0) {
         await connection.rollback();
         res.json({ status: 2, result: "Sub Service already exists." });
@@ -259,7 +259,7 @@ async createBusinessProfile(req: Request, res: Response) {
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
-    const checkDup = "SELECT COUNT(*) as count FROM BUSSINESS_PROFILE WHERE BUSINESS_NAME = ? AND MOBILE = ?";
+    const checkDup = "SELECT COUNT(BUSINESS_NAME) as count FROM BUSSINESS_PROFILE WHERE BUSINESS_NAME = ? AND MOBILE = ?";
     const dupResult = await executeDbQuery(checkDup, [input.BUSINESS_NAME, input.MOBILE], false, apiName, port, connection);
     if (Number(dupResult[0]?.count) > 0) {
       await connection.rollback();
@@ -295,13 +295,13 @@ async createBusinessProfile(req: Request, res: Response) {
 async getAllBusinessProfiles(req: Request, res: Response) {
   const apiName = "businessprofile/read-all";
   const port = req.socket.localPort!;
-const id=req.query.id;
-
-  let query = `SELECT  B.SERVICE_ID, S.NAME SERVICE, B.SUB_SERVICE_ID, SUB.NAME AS SUB_SERVICE, B.BUSINESS_ID, B.BUSINESS_NAME, B.OWNER_NAME, B.BUSINESS_TYPE, B.MOBILE, B.ADDRESS, B.WEEKDAY_TIMINGS, B.SUNDAY_TIMINGS, B.WEBSITE_URL, B.EMAIL, B.DESCRIPTION, B.LATITUDE, B.LONGITUDE, B.DEFAULT_CONTACT, B.IMAGE_URL1, B.IMAGE_URL2, B.IMAGE_URL3, B.IMAGE_URL4, B.IMAGE_URL5, B.STATUS  FROM BUSSINESS_PROFILE B LEFT JOIN SERVICES S ON S.ID=B.SERVICE_ID LEFT JOIN SUB_SERVICES SUB ON SUB.SUB_SERVICE_ID=B.SUB_SERVICE_ID `;
-
-  if(id){
-  query+=`where B.CREATED_BY='${id}'`
-}
+const id = req.query.id || "";
+    
+  let query = ` SELECT B.SERVICE_ID, S.NAME AS SERVICE, B.SUB_SERVICE_ID, SUB.NAME AS SUB_SERVICE, B.BUSINESS_ID, B.BUSINESS_NAME, B.OWNER_NAME, B.BUSINESS_TYPE, B.MOBILE, B.ADDRESS, B.WEEKDAY_TIMINGS, B.SUNDAY_TIMINGS, B.WEBSITE_URL, B.EMAIL, B.DESCRIPTION, B.LATITUDE, B.LONGITUDE, B.DEFAULT_CONTACT, B.IMAGE_URL1, B.IMAGE_URL2, B.IMAGE_URL3, B.IMAGE_URL4, B.IMAGE_URL5, B.STATUS FROM BUSSINESS_PROFILE B LEFT JOIN SERVICES S ON S.ID = B.SERVICE_ID LEFT JOIN SUB_SERVICES SUB ON SUB.SUB_SERVICE_ID = B.SUB_SERVICE_ID`;
+    
+     if (id) {
+       query += `where B.CREATED_BY='${id}'`;
+     }
 
   try {
     const rows = await executeDbQuery(query, [], false, apiName, port);
