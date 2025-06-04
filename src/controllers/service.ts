@@ -8,7 +8,7 @@ export default class ServiceController {
 
   constructor(app: Application) {
     app.use("/api/service", this.router);
-
+ this.router.post('/bulk-upload', this.bulkUploadServicess.bind(this));
     this.router.get("/services", authenticateToken as any,this.getAllServices.bind(this));
     this.router.get("/servicesbyid", this.getServiceById.bind(this));
     this.router.put("/services", this.updateService.bind(this));
@@ -28,6 +28,108 @@ export default class ServiceController {
     this.router.post("/BussinessProfiles", this.createBusinessProfile.bind(this));
 
     
+  }
+
+
+   async bulkUploadServicess(req: Request, res: Response) {
+        const apiName = "subservice/create";
+    const port = req.socket.localPort!;
+    let input = req.body;
+    const userId = req.headers["userid"] || "";
+    if(!input.CITY_ID){
+      input.CITY_ID='001'
+    }
+    let connection;
+  
+      try {
+          connection = await pool.getConnection();
+          await connection.beginTransaction();
+  
+          for (let i = 0; i < input.length; i++) { 
+              const currentItem = input[i];
+              const servicename = currentItem.services;
+              let serviceID = '';
+              const subservicename = currentItem.subservices||'';
+              let subserviceID = '';
+  
+              const checkServiceDupQuery = ` SELECT ID FROM SERVICES WHERE NAME=? `;
+              const serviceDupResult = await executeDbQuery(checkServiceDupQuery, [servicename], false, apiName, port, connection);
+  
+              if (serviceDupResult && serviceDupResult.length > 0 && Number(serviceDupResult[0]?.ID) > 0) {
+                  // Service exists, use its ID
+                  serviceID = serviceDupResult[0].ID;
+              } else {
+                  // Service does not exist, create a new one
+                  // NOTE: This ID generation method (MAX(ID) + 1) can lead to race conditions
+                  // in a high-concurrency environment. Consider using auto-incrementing IDs
+                  // from the database or a UUID generator for robust ID management.
+                  const rows = await executeDbQuery(
+                      "SELECT MAX(CAST(ID AS UNSIGNED)) AS maxId FROM SERVICES",
+                      [],
+                      false,
+                      apiName,
+                      port,
+                      connection
+                  );
+                  serviceID = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(3, '0');
+                  const insertServiceQuery = ` INSERT INTO SERVICES (ID, NAME, STATUS) VALUES (?, ?, ?) `;
+                  const serviceParams = [serviceID, servicename, 'A'];
+                  await executeDbQuery(insertServiceQuery, serviceParams, false, apiName, port, connection);
+              }
+  
+              // 2. Now, regardless of whether the service was new or existing,
+              //    check and create the sub-service for the current serviceID.
+              const checkSubServiceDupQuery = ` SELECT SUB_SERVICE_ID AS ID FROM SUB_SERVICES WHERE NAME = ? AND SERVICE_ID = ? `;
+              const subServiceDupResult = await executeDbQuery(checkSubServiceDupQuery, [subservicename, serviceID], false, apiName, port, connection);
+  
+              if (subServiceDupResult && subServiceDupResult.length > 0 && Number(subServiceDupResult[0]?.ID) > 0) {
+                  // Sub-service exists, no action needed (or you could add update logic here if desired)
+                  subserviceID = subServiceDupResult[0].ID; // Store it if needed later
+              } else {
+                  // Sub-service does not exist, create a new one
+                  const rows = await executeDbQuery(
+                      "SELECT MAX(CAST(SUB_SERVICE_ID AS UNSIGNED)) AS maxId FROM SUB_SERVICES",
+                      [],
+                      false,
+                      apiName,
+                      port,
+                      connection
+                  );
+                  subserviceID = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(4, '0');
+  
+                  // Call uploadImage with the specific IMAGE_URL for the current item
+                  const imageUrl = await uploadImage(currentItem.IMAGE_URL);
+  
+                  // IMPORTANT: Corrected the INSERT query for SUB_SERVICES.
+                  // The original query had 8 placeholders but only 4 parameters were provided.
+                  // Assuming your SUB_SERVICES table has columns: SERVICE_ID, SUB_SERVICE_ID, NAME, STATUS.
+                  // If IMAGE_URL also needs to be stored in SUB_SERVICES, you must add a column for it
+                  // in your database schema and include a placeholder and parameter here.
+                  const insertSubServiceQuery = ` INSERT INTO SUB_SERVICES (SERVICE_ID, SUB_SERVICE_ID, NAME, STATUS) VALUES (?, ?, ?, ?) `;
+                  const subServiceParams = [serviceID, subserviceID, subservicename, 'A'];
+                  await executeDbQuery(insertSubServiceQuery, subServiceParams, false, apiName, port, connection);
+              }
+          }
+  
+          // Commit the transaction after all operations are successful
+          await connection.commit();
+  
+          const results = { message: "Services and Sub-services processed successfully." };
+          res.json({ status: 0, result: results });
+  
+      } catch (err: any) {
+          // Rollback the transaction if any error occurs
+          if (connection) {
+              console.error("Transaction rolled back due to error:", err);
+              await connection.rollback();
+          }
+          res.json({ status: 1, result: err.toString() });
+      } finally {
+          // Always release the connection back to the pool
+          if (connection) {
+              connection.release();
+          }
+      }
   }
   
   async Servicesnames(req: Request, res: Response): Promise<void> {
