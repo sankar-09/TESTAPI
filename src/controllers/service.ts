@@ -2,6 +2,7 @@ import express, { Request, Response, Application } from "express";
 import { pool, executeDbQuery } from "../db";
 import { uploadImage } from "../utils/cloudinaryUtil";
 import { authenticateToken } from "../middleWare/authMiddleWare";
+import redis from "../redis/redisClient";
 
 export default class ServiceController {
   public router = express.Router();
@@ -203,17 +204,32 @@ export default class ServiceController {
   async getAllServices(req: Request, res: Response) {
     const apiName = "service/read-all";
     const port = req.socket.localPort!;
+    const cacheKey = "all_services";
     // console.log('headers is',headers);
+     try {
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      res.json({ status: 0, result: JSON.parse(cachedData), cached: true });
+      return;
+    }
     
     const query = ` SELECT CITY_ID, ID, NAME, DESCRIPTION, IMAGE_URL, STATUS, CREATED_BY, DATE_FORMAT(CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, EDITED_BY, DATE_FORMAT(EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM SERVICES `;
+ const rows = await executeDbQuery(query, [], false, apiName, port);
 
-    try {
-      const rows = await executeDbQuery(query, [], false, apiName, port);
-      res.json({ status: 0, result: rows });
-    } catch (err: any) {
-      res.json({ status: 1, result: err.toString() });
-    }
+    await redis.set(cacheKey, JSON.stringify(rows), "EX", 3600); // Cache for 1 hour
+
+    // res.json({ status: 0, result: rows });
+    const cached = await redis.get("all_services");
+if (cached) {
+  console.log("Redis cache hit");
+   res.json({ status: 0, result: JSON.parse(cached) });
+   return;
+}
+  } catch (err: any) {
+    res.json({ status: 1, result: err.toString() });
   }
+}
+  
 
   async getServiceById(req: Request, res: Response) {
     const apiName = "service/read";
@@ -237,7 +253,7 @@ export default class ServiceController {
      let connection: any;
     connection = await pool.getConnection();
     await connection.beginTransaction();
-
+    await redis.del("all_services");
     const image_url = await uploadImage(input.IMAGE_URL);
     const query = ` UPDATE SERVICES SET  NAME = ?, DESCRIPTION = ?, IMAGE_URL = ?, STATUS = ?, EDITED_BY = ? WHERE ID = ? `;
     const params = [ input.NAME, input.DESCRIPTION, image_url, input.STATUS, userId, input.ID];
@@ -293,19 +309,34 @@ export default class ServiceController {
     }
   }
 
-  async getAllSubServices(req: Request, res: Response) {
+  async getAllSubServices(req: Request, res: Response):Promise<void> {
     const apiName = "subservice/read-all";
     const port = req.socket.localPort!;
+     const cacheKey = "all_subservices";
+
+  try {
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      res.json({ status: 0, result: JSON.parse(cachedData), cached: true });
+      return;
+    }
     const query = "SELECT  S.NAME as Service_name, SUB.SERVICE_ID, SUB.SUB_SERVICE_ID as ID, SUB.NAME, SUB.DESCRIPTION, SUB.STATUS, SUB.IMAGE_URL, SUB.CREATED_BY, DATE_FORMAT(SUB.CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, SUB.EDITED_BY, DATE_FORMAT(SUB.EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM SUB_SERVICES SUB LEFT JOIN SERVICES S ON SUB.SERVICE_ID = S.ID";
 
-    try {
-      const rows = await executeDbQuery(query, [], false, apiName, port);
-      res.json({ status: 0, result: rows });
-    } catch (err: any) {
-      res.json({ status: 1, result: err.toString() });
-    }
-  }
+     const rows = await executeDbQuery(query, [], false, apiName, port);
 
+    await redis.set(cacheKey, JSON.stringify(rows), "EX", 3600); // Cache for 1 hour
+
+    // res.json({ status: 0, result: rows });
+    const cached = await redis.get("all_subservices");
+if (cached) {
+  console.log("Redis cache hit");
+   res.json({ status: 0, result: JSON.parse(cached) });
+   return;
+}
+  } catch (err: any) {
+    res.json({ status: 1, result: err.toString() });
+  }
+}
   async getSubServiceById(req: Request, res: Response) {
     const apiName = "subservice/read";
     const port = req.socket.localPort!;
@@ -338,8 +369,9 @@ export default class ServiceController {
 
       const result = await executeDbQuery(query, params, true, apiName, port);
       await connection.commit();
-
       res.json({ status: 0, result: { message: "Sub-service updated" } });
+      await redis.del("all_subservices");
+
     } catch (err: any) {
       if (connection) await connection.rollback();
       res.json({ status: 1, error: err.toString() });
@@ -394,20 +426,30 @@ async createBusinessProfile(req: Request, res: Response) {
   }
 }
 
-async getAllBusinessProfiles(req: Request, res: Response) {
+async getAllBusinessProfiles(req: Request, res: Response):Promise<void> {
   const apiName = "businessprofile/read-all";
   const port = req.socket.localPort!;
-const id = req.query.id || "";
-    
-  let query = ` SELECT B.SERVICE_ID, S.NAME AS SERVICE, B.SUB_SERVICE_ID, SUB.NAME AS SUB_SERVICE, B.BUSINESS_ID, B.BUSINESS_NAME, B.OWNER_NAME, B.BUSINESS_TYPE, B.MOBILE, B.ADDRESS, B.WEEKDAY_TIMINGS, B.SUNDAY_TIMINGS, B.WEBSITE_URL, B.EMAIL, B.DESCRIPTION, B.LATITUDE, B.LONGITUDE, B.DEFAULT_CONTACT, B.IMAGE_URL1, B.IMAGE_URL2, B.IMAGE_URL3, B.IMAGE_URL4, B.IMAGE_URL5, B.STATUS FROM BUSSINESS_PROFILE B LEFT JOIN SERVICES S ON S.ID = B.SERVICE_ID LEFT JOIN SUB_SERVICES SUB ON SUB.SUB_SERVICE_ID = B.SUB_SERVICE_ID`;
-    
-     if (id) {
-       query += `where B.CREATED_BY='${id}'`;
-     }
+ const cacheKey = "all_bussiness";
 
   try {
+    const cachedData = await redis.get(cacheKey);
+    if (cachedData) {
+      res.json({ status: 0, result: JSON.parse(cachedData), cached: true });
+      return;
+    }
+  const query = `SELECT B.CITY_ID, B.SERVICE_ID, S.NAME SERVICE, B.SUB_SERVICE_ID, SUB.NAME AS SUB_SERVICE, B.BUSINESS_ID, B.BUSINESS_NAME, B.OWNER_NAME, B.BUSINESS_TYPE, B.MOBILE, B.ADDRESS, B.WEEKDAY_TIMINGS, B.SUNDAY_TIMINGS, B.WEBSITE_URL, B.EMAIL, B.DESCRIPTION, B.LATITUDE, B.LONGITUDE, B.DEFAULT_CONTACT, B.IMAGE_URL1, B.IMAGE_URL2, B.IMAGE_URL3, B.IMAGE_URL4, B.IMAGE_URL5, B.STATUS, B.CREATED_BY, DATE_FORMAT(B.CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, B.EDITED_BY, DATE_FORMAT(B.EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM BUSSINESS_PROFILE B LEFT JOIN SERVICES S ON S.ID=B.SERVICE_ID LEFT JOIN SUB_SERVICES SUB ON SUB.SUB_SERVICE_ID=B.SUB_SERVICE_ID`;
+
     const rows = await executeDbQuery(query, [], false, apiName, port);
-    res.json({ status: 0, result: rows });
+
+    await redis.set(cacheKey, JSON.stringify(rows), "EX", 3600); // Cache for 1 hour
+
+    // res.json({ status: 0, result: rows });
+    const cached = await redis.get("all_bussiness");
+if (cached) {
+  console.log("Redis cache hit");
+   res.json({ status: 0, result: JSON.parse(cached) });
+   return;
+}
   } catch (err: any) {
     res.json({ status: 1, result: err.toString() });
   }
@@ -438,6 +480,7 @@ async updateBusinessProfile(req: Request, res: Response) {
   try {
     connection = await pool.getConnection();
     await connection.beginTransaction();
+      await redis.del("all_bussiness");
 
     const image_url1 = await uploadImage(input.IMAGE_URL1);
     const image_url2 = await uploadImage(input.IMAGE_URL2);
