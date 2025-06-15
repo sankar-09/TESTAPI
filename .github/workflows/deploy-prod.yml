@@ -44,7 +44,7 @@ jobs:
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
-          username: ubuntu
+          username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
           script: |
             # Update package lists and install Docker and AWS CLI if not present
