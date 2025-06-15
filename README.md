@@ -9,4 +9,18 @@
 9. npm install dotenv
 10. npm install jsonwebtoken
 11. npm install -D @types/jsonwebtoken
-12. 
+
+-----------Docker
+docker ps -a
+docker build -t test-api .
+docker images
+cd ..
+docker build .\TESTAPI_NR\ -t test-api:latest
+docker run --name api -p 3000:3000/tcp -d test-api
+
+docker run --name api --env-file "TESTAPI_NR\.env" -p 3000:3000 -d test-api
+
+docker ps -a
+docker logs -f api
+docker kill api
+docker rm api
