@@ -11,16 +11,16 @@
 11. npm install -D @types/jsonwebtoken
 
 -----------Docker
-docker ps -a
-docker build -t test-api .
-docker images
-cd ..
-docker build .\TESTAPI_NR\ -t test-api:latest
-docker run --name api -p 3000:3000/tcp -d test-api
+1. docker ps -a
+2. docker build -t test-api .
+3. docker images
+4. cd ..
+5. docker build .\TESTAPI_NR\ -t test-api:latest
+6. docker run --name api -p 3000:3000/tcp -d test-api
 
-docker run --name api --env-file "TESTAPI_NR\.env" -p 3000:3000 -d test-api
+7. docker run --name api --env-file "TESTAPI_NR\.env" -p 3000:3000 -d test-api
 
-docker ps -a
-docker logs -f api
+8. docker ps -a
+9. docker logs -f api
 docker kill api
 docker rm api
