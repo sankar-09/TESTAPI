@@ -3,7 +3,7 @@ dotenv.config();
 import express from "express";
 import http, { Server as HttpServer } from "http";
 import httpProxy from "http-proxy";
-import { logger } from "./db"; // Import the centralized logger
+import { logger } from "./db"; // Your centralized logger
 import UserController from "./controllers/user";
 import ServiceController from "./controllers/service";
 import NewsFeedController from "./controllers/newsFeed";
@@ -11,6 +11,9 @@ import JobsController from "./controllers/jobs";
 import NearLocationController from "./controllers/locform";
 import MobileAppServices from "./controllers/mobileAppServices";
 import AdsController from "./controllers/ad";
+
+// Increase max listeners if needed
+process.setMaxListeners(20);
 
 interface ServerInfo {
   url: string;
@@ -21,7 +24,7 @@ interface ServerInfo {
 const app = express();
 app.use(express.json({ limit: "50mb" }));
 
-// Register your controllers/routes
+// Register controllers/routes
 new UserController(app);
 new ServiceController(app);
 new NewsFeedController(app);
@@ -30,7 +33,7 @@ new NearLocationController(app);
 new MobileAppServices(app);
 new AdsController(app);
 
-// Basic health check endpoint for each worker
+// Basic health check endpoint (for worker servers)
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
@@ -38,18 +41,19 @@ app.get("/health", (req, res) => {
 // ------------------------------------------------------------------
 // LOAD BALANCER SETUP WITH HEALTH CHECKS
 // ------------------------------------------------------------------
-const numOfServers = 9;
+const numOfServers = 15;
 const servers: ServerInfo[] = [];
 let cur = 0;
 
 // Start multiple server instances (workers)
+// Each worker listens on an ephemeral port.
 function loadServers(count: number, appInstance: express.Express) {
   for (let i = 0; i < count; i++) {
     const server = appInstance.listen(0, () => {
       const addr = server.address();
       if (addr && typeof addr === "object") {
         const url = `http://localhost:${addr.port}`;
-        servers.push({ url, server, healthy: true });
+        servers.push({ url, server, healthy: false });
         logger.info(`Worker ${i} listening on port ${addr.port}`);
       }
     });
@@ -58,33 +62,46 @@ function loadServers(count: number, appInstance: express.Express) {
 
 loadServers(numOfServers, app);
 
-// Health check function for each server instance
+// Health check function: pings each worker's /health endpoint.
 function checkHealthStatus() {
-  servers.forEach((serverInfo) => {
+  servers.forEach((serverInfo, index) => {
     http
       .get(`${serverInfo.url}/health`, (res) => {
-        serverInfo.healthy = res.statusCode === 200;
+        if (res.statusCode === 200) {
+          if (!serverInfo.healthy) {
+            logger.info(`Worker at ${serverInfo.url} is now healthy.`);
+          }
+          serverInfo.healthy = true;
+        } else {
+          logger.warn(`Worker at ${serverInfo.url} returned status code ${res.statusCode}`);
+          serverInfo.healthy = false;
+        }
       })
-      .on("error", () => {
+      .on("error", (err) => {
+        logger.error(`Health check failed for ${serverInfo.url}: ${err.message}`);
         serverInfo.healthy = false;
       });
   });
 }
 setInterval(checkHealthStatus, 5000); // Run health check every 5 seconds
 
-// Create a proxy server that directs requests to healthy servers
+// Create a proxy server to forward requests to workers.
 const proxy = httpProxy.createProxyServer({ secure: false });
 const loadBalancerPort = 3000;
 
 const lbServer = http.createServer((req, res) => {
-  // Filter healthy servers only
+  logger.info(`Incoming request: ${req.method} ${req.url}`);
+  
+  // Filter out healthy servers.
   const healthyServers = servers.filter((srv) => srv.healthy);
+  
   if (healthyServers.length === 0) {
+    logger.error("No healthy servers available. Returning 503.");
     res.writeHead(503, { "Content-Type": "text/plain" });
     return res.end("No servers available");
   }
 
-  const start = Date.now();
+  // Use round-robin based on healthy servers.
   const targetInfo = healthyServers[cur % healthyServers.length];
   cur++;
 
@@ -101,7 +118,7 @@ const lbServer = http.createServer((req, res) => {
   );
 
   res.on("finish", () => {
-    logger.info(`${req.method} ${req.url} completed in ${Date.now() - start}ms`);
+    logger.info(`${req.method} ${req.url} completed`);
   });
 });
 
@@ -110,8 +127,7 @@ lbServer.listen(loadBalancerPort, () => {
 });
 
 // ------------------------------------------------------------------
-// Graceful shutdown with a single, global shutdown listener
-// ------------------------------------------------------------------
+// Global graceful shutdown: Closes load balancer and all worker servers.
 const shutdownAllServers = () => {
   logger.info("Shutting down load balancer");
   lbServer.close();
@@ -125,7 +141,7 @@ const shutdownAllServers = () => {
     }
   });
 
-  // Allow time for graceful shutdown, then exit the process.
+  // Allow some time for cleanup, then exit.
   setTimeout(() => process.exit(0), 3000);
 };
 
