@@ -30,7 +30,7 @@ new NearLocationController(app);
 new MobileAppServices(app);
 new AdsController(app);
 
-// Add a basic health check endpoint for each instance
+// Basic health check endpoint for each worker
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
@@ -42,7 +42,7 @@ const numOfServers = 15;
 const servers: ServerInfo[] = [];
 let cur = 0;
 
-// Start multiple server instances
+// Start multiple server instances (workers)
 function loadServers(count: number, appInstance: express.Express) {
   for (let i = 0; i < count; i++) {
     const server = appInstance.listen(0, () => {
@@ -53,37 +53,26 @@ function loadServers(count: number, appInstance: express.Express) {
         logger.info(`Worker ${i} listening on port ${addr.port}`);
       }
     });
-
-    // Setup graceful shutdown for each server instance
-    const shutdown = () => {
-      logger.info(`Shutting down server on ${server.address()}`);
-      server.close();
-    };
-    process.on("SIGTERM", shutdown);
-    process.on("SIGINT", shutdown);
   }
 }
 
 loadServers(numOfServers, app);
 
-// Health check function for server instances
+// Health check function for each server instance
 function checkHealthStatus() {
   servers.forEach((serverInfo) => {
     http
       .get(`${serverInfo.url}/health`, (res) => {
-        const { statusCode } = res;
-        serverInfo.healthy = statusCode === 200;
+        serverInfo.healthy = res.statusCode === 200;
       })
       .on("error", () => {
         serverInfo.healthy = false;
       });
   });
 }
+setInterval(checkHealthStatus, 5000); // Run health check every 5 seconds
 
-// Run the health check every 5 seconds
-setInterval(checkHealthStatus, 5000);
-
-// Create a proxy server
+// Create a proxy server that directs requests to healthy servers
 const proxy = httpProxy.createProxyServer({ secure: false });
 const loadBalancerPort = 3000;
 
@@ -96,8 +85,6 @@ const lbServer = http.createServer((req, res) => {
   }
 
   const start = Date.now();
-
-  // Use round-robin scheduling among healthy servers
   const targetInfo = healthyServers[cur % healthyServers.length];
   cur++;
 
@@ -122,13 +109,25 @@ lbServer.listen(loadBalancerPort, () => {
   logger.info(`Load balancer listening on port ${loadBalancerPort}`);
 });
 
-// Graceful shutdown for the load balancer itself
-const shutdownLoadBalancer = () => {
+// ------------------------------------------------------------------
+// Graceful shutdown with a single, global shutdown listener
+// ------------------------------------------------------------------
+const shutdownAllServers = () => {
   logger.info("Shutting down load balancer");
   lbServer.close();
-  servers.forEach((srv) => srv.server.close());
-  process.exit(0);
+
+  logger.info("Shutting down all worker servers");
+  servers.forEach((serverInfo) => {
+    if (serverInfo.server.listening) {
+      serverInfo.server.close(() => {
+        logger.info(`Server at ${serverInfo.url} closed`);
+      });
+    }
+  });
+
+  // Allow time for graceful shutdown, then exit the process.
+  setTimeout(() => process.exit(0), 3000);
 };
 
-process.on("SIGTERM", shutdownLoadBalancer);
-process.on("SIGINT", shutdownLoadBalancer);
+process.on("SIGTERM", shutdownAllServers);
+process.on("SIGINT", shutdownAllServers);
