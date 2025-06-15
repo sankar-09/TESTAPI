@@ -38,7 +38,7 @@ app.get("/health", (req, res) => {
 // ------------------------------------------------------------------
 // LOAD BALANCER SETUP WITH HEALTH CHECKS
 // ------------------------------------------------------------------
-const numOfServers = 15;
+const numOfServers = 9;
 const servers: ServerInfo[] = [];
 let cur = 0;
 
