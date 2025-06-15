@@ -68,9 +68,6 @@ jobs:
             sudo docker stop myappcontainer || true
             sudo docker rm myappcontainer || true
 
-            # Create an env file with the required ACCESS_TOKEN_KEY.
-            echo "ACCESS_TOKEN_KEY=${{ secrets.ACCESS_TOKEN_KEY }}" > $(pwd)/myappcontainer.env
-
             # Pull the latest Docker image.
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
             
