@@ -5,7 +5,8 @@
   "main": "dist/app.js",
   "scripts": {
     "build": "tsc",
-    "start": "node dist/app.js"
+    "start": "node dist/app.js",
+    "prestartt": "npm run build"
   },
   "dependencies": {
     "@types/node": "^22.15.14",
@@ -14,14 +15,17 @@
     "compression": "^1.8.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
+    "express-handlebars": "^8.0.1",
     "fs": "^0.0.1-security",
     "http-proxy": "^1.18.1",
     "jsonwebtoken": "^9.0.2",
     "multer": "^1.4.5-lts.2",
     "mysql2": "^3.14.1",
     "node-cache": "^5.1.2",
+    "nodemailer": "^7.0.3",
+    "nodemailer-express-handlebars": "^7.0.0",
     "path": "^0.12.7",
-    "redis": "^5.0.1",
+    "smtp": "^0.0.5",
     "typescript": "^5.8.3",
     "winston": "^3.17.0",
     "winston-daily-rotate-file": "^5.0.0"
@@ -30,6 +34,8 @@
     "@types/bcrypt": "^5.0.2",
     "@types/express": "^5.0.1",
     "@types/http-proxy": "^1.17.16",
-    "@types/jsonwebtoken": "^9.0.9"
+    "@types/jsonwebtoken": "^9.0.9",
+    "@types/nodemailer": "^6.4.17",
+    "@types/nodemailer-express-handlebars": "^4.0.5"
   }
 }

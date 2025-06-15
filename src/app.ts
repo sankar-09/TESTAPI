@@ -1,3 +1,5 @@
+import dotenv from "dotenv";
+dotenv.config();
 import express from "express";
 import http from "http";
 import httpProxy from "http-proxy";
@@ -6,8 +8,9 @@ import UserController from "./controllers/user";
 import ServiceController from "./controllers/service";
 import NewsFeedController from "./controllers/newsFeed";
 import JobsController from "./controllers/jobs";
-import CategoryController from "./controllers/categories";
-import EmployeeController from "./controllers/employees";
+import NearLocationController from "./controllers/locform";
+import MobileAppServices from "./controllers/mobileAppServices";
+import AdsController from "./controllers/ad";
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -15,9 +18,9 @@ new UserController(app);
 new ServiceController(app);
 new NewsFeedController(app);
 new JobsController(app);
-new CategoryController(app);
-new EmployeeController(app);
-
+new NearLocationController(app);
+new MobileAppServices(app);
+new AdsController(app);
 // ------------------------------------------------------------------
 // LOAD BALANCER SETUP
 // ------------------------------------------------------------------

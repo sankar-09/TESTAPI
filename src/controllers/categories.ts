@@ -1,6 +1,7 @@
 import express, { Request, Response, Application } from "express";
 import { pool, executeDbQuery } from "../db";
 import { uploadImage } from "../utils/cloudinaryUtil";
+import { userInfo } from "os";
 
 export default class CategoryController {
   public router = express.Router();
@@ -13,17 +14,21 @@ export default class CategoryController {
     this.router.put("/categories", this.updateCategory.bind(this));
     this.router.post("/categories", this.createCategory.bind(this));
 
-    this.router.get("/subcategories", this.getAllSubCategories.bind(this));
-    this.router.get("/subcategorybyid", this.getSubCategoryById.bind(this));
-    this.router.put("/subcategories", this.updateSubCategory.bind(this));
-    this.router.post("/subcategories", this.createSubCategory.bind(this));
+    this.router.get("/SubServices", this.getAllSubCategories.bind(this));
+    this.router.get("/SubServicesbyid", this.getSubCategoryById.bind(this));
+    this.router.put("/SubServices", this.updateSubCategory.bind(this));
+    this.router.post("/SubServices", this.createSubCategory.bind(this));
+    // this.router.get("/subcategories", this.getAllSubCategories.bind(this));
+    // this.router.get("/subcategorybyid", this.getSubCategoryById.bind(this));
+    // this.router.put("/subcategories", this.updateSubCategory.bind(this));
+    // this.router.post("/subcategories", this.createSubCategory.bind(this));
   }
 
   // -------------------------- Category Endpoints -------------------------- //
 
   async createCategory(req: Request, res: Response) {
     const apiName = "category/create";
-    const port = req.socket.localPort!;
+    const port = req.socket.localPort!; const userId = req.headers["userid"] || "";
     const input = req.body;
     let connection;
 
@@ -45,7 +50,7 @@ export default class CategoryController {
       const imageUrl = await uploadImage(input.IMAGE_URL);
 
       const insertQuery = `INSERT INTO CATEGORIES (CITY_ID, CAT_ID, NAME, DESCRIPTION, STATUS, IMAGE_URL, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?)`;
-      const params = [input.CITY_ID, newId, input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, input.CREATED_BY];
+      const params = [input.CITY_ID, newId, input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, userId];
 
       const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
       await connection.commit();
@@ -89,13 +94,13 @@ export default class CategoryController {
 
   async updateCategory(req: Request, res: Response) {
     const apiName = "category/update";
-    const port = req.socket.localPort!;
+    const port = req.socket.localPort!; const userId = req.headers["userid"] || "";
     const input = req.body;
 
     try {
       const imageUrl = await uploadImage(input.IMAGE_URL);
       const query = `UPDATE CATEGORIES SET NAME = ?, DESCRIPTION = ?, STATUS = ?, IMAGE_URL = ?, EDITED_BY = ? WHERE CAT_ID = ?`;
-      const params = [input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, input.EDITED_BY, input.CAT_ID];
+      const params = [input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, userId, input.CAT_ID];
 
       const result = await executeDbQuery(query, params, true, apiName, port);
       res.json({ status: 0, result: { message: "Category updated" } });
@@ -108,7 +113,7 @@ export default class CategoryController {
 
   async createSubCategory(req: Request, res: Response) {
     const apiName = "subcategory/create";
-    const port = req.socket.localPort!;
+    const port = req.socket.localPort!; const userId = req.headers["userid"] || "";
     const input = req.body;
     let connection;
 
@@ -131,7 +136,7 @@ export default class CategoryController {
       const imageUrl = await uploadImage(input.IMAGE_URL);
 
       const insertQuery = `INSERT INTO SUBCATEGORIES (CITY_ID, CAT_ID, SUBCAT_ID, NAME, DESCRIPTION, STATUS, IMAGE_URL, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-      const params = [input.CITY_ID, input.CAT_ID, newId, input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, input.CREATED_BY];
+      const params = [input.CITY_ID, input.CAT_ID, newId, input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, userId];
 
       const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
       await connection.commit();
@@ -175,14 +180,14 @@ export default class CategoryController {
 
   async updateSubCategory(req: Request, res: Response) {
     const apiName = "subcategory/update";
-    const port = req.socket.localPort!;
+    const port = req.socket.localPort!; const userId = req.headers["userid"] || "";
     const input = req.body;
 
     try {
       const imageUrl = await uploadImage(input.IMAGE_URL);
       const query = `UPDATE SUBCATEGORIES SET NAME = ?, DESCRIPTION = ?, STATUS = ?, IMAGE_URL = ?, EDITED_BY = ? WHERE SUBCAT_ID = ?`;
 
-      const params = [input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, input.EDITED_BY, input.SUBCAT_ID];
+      const params = [input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, userId, input.SUBCAT_ID];
       const result = await executeDbQuery(query, params, true, apiName, port);
 
       res.json({ status: 0, result: { message: "Sub-category updated" } });
