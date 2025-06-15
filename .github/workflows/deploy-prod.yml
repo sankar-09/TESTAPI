@@ -30,7 +30,9 @@ jobs:
           REPOSITORY: aws-deploy
           IMAGE_TAG: ${{ github.sha }}
         run: |
+          echo "Building Docker image..."
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
+          echo "Pushing Docker image..."
           docker push $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
       - name: Deploy Docker Image to EC2
@@ -38,22 +40,21 @@ jobs:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
           REPOSITORY: aws-deploy
           IMAGE_TAG: ${{ github.sha }}
-          AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
+          AWS_DEFAULT_REGION: eu-north-1
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
-          username: ubuntu
+          username: ubuntu   # Change this if your target instance uses a different username (e.g. Administrator for Windows)
           key: ${{ env.PRIVATE_SSH_KEY }}
+          shell: pwsh
           script: |
-            # Update package lists
-            sudo apt update
-            # Install Docker and AWS CLI if they are not already present
-            sudo apt install docker.io awscli -y
-            # Log in to ECR using the updated command
-            aws ecr get-login-password --region $AWS_DEFAULT_REGION | sudo docker login --username AWS --password-stdin $REGISTRY
-            # Stop and remove any existing container (ignore errors)
-            sudo docker stop myappcontainer || true
-            sudo docker rm myappcontainer || true
-            # Pull and run the new Docker image
-            sudo docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
-            sudo docker run -d --name myappcontainer -p 3000:3000 $REGISTRY/$REPOSITORY:$IMAGE_TAG
+            # Authenticate Docker to ECR using AWS Tools for PowerShell
+            (Get-ECRLoginCommand).Password | docker login --username AWS --password-stdin 166799231300.dkr.ecr.eu-north-1.amazonaws.com
+            
+            # Stop and remove any existing container (errors are suppressed)
+            docker stop myappcontainer -ErrorAction SilentlyContinue
+            docker rm myappcontainer -ErrorAction SilentlyContinue
+            
+            # Pull and run the newly pushed Docker image
+            docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
+            docker run -d --name myappcontainer -p 3000:3000 $REGISTRY/$REPOSITORY:$IMAGE_TAG
