@@ -46,13 +46,18 @@ jobs:
           host: ${{ env.SERVER_PUBLIC_IP }}
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
+          # Pass AWS credentials to the remote host
+          envs: AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY }},AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }},AWS_REGION=${{ env.AWS_REGION }}
           script: |
-            # Update package lists and install Docker and AWS CLI if not present
-            sudo apt update
-            sudo apt install docker.io awscli -y
+            # Update packages and install Docker and AWS CLI using yum
+            sudo yum update -y
+            sudo yum install -y docker aws-cli
+
+            # Start the Docker service
+            sudo service docker start
 
             # Retrieve an authentication token and authenticate Docker to your registry
-            aws ecr get-login-password --region eu-north-1 | sudo docker login --username AWS --password-stdin 166799231300.dkr.ecr.eu-north-1.amazonaws.com
+            aws ecr get-login-password --region ${AWS_REGION} | sudo docker login --username AWS --password-stdin 166799231300.dkr.ecr.eu-north-1.amazonaws.com
 
             # Stop and remove any existing container (ignore errors if not present)
             sudo docker stop myappcontainer || true
