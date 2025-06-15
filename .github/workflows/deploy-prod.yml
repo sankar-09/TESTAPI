@@ -27,7 +27,7 @@ jobs:
       - name: Build and Push Docker Image
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: TESTAPI
+          REPOSITORY: aws-deploy
           IMAGE_TAG: ${{ github.sha }}
         run: |
           docker build -t $REGISTRY/$REPOSITORY:$IMAGE_TAG .
@@ -36,7 +36,7 @@ jobs:
       - name: Deploy Docker Image to EC2
         env:
           REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: TESTAPI
+          REPOSITORY: aws-deploy
           IMAGE_TAG: ${{ github.sha }}
           AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
         uses: appleboy/ssh-action@master
