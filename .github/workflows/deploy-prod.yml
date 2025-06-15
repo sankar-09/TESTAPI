@@ -7,7 +7,6 @@ on:
 
 env:
   AWS_REGION: eu-north-1
-  # These values will be overriden by secrets in the step below
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   PRIVATE_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
@@ -24,7 +23,7 @@ jobs:
       - name: Login to AWS ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        # (Note: This step may not produce an output variable we need, so we’ll set the registry manually.)
+        # (This step doesn’t output variables we need, so we set the registry manually.)
 
       - name: Build and Push Docker Image
         env:
@@ -40,20 +39,19 @@ jobs:
           docker push $REGISTRY/$REPOSITORY:latest
 
       - name: Deploy Docker Image to EC2
-        # Also set the AWS credentials in the step's environment
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ env.AWS_REGION }}
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
-          # Use a block literal for envs to ensure proper interpolation.
-          envs: |
-            AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY }},AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }},AWS_REGION=${{ env.AWS_REGION }}
+          # We omit the envs input here because we are defining the credentials explicitly within the script.
           script: |
+            # Directly set and export the AWS credentials by interpolating GitHub secrets.
+            AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY }}"
+            AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
+            AWS_REGION="${{ env.AWS_REGION }}"
+            export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION
+            
             # Define explicit variables for the ECR registry and image details.
             REGISTRY="166799231300.dkr.ecr.eu-north-1.amazonaws.com"
             REPOSITORY="aws-deploy"
@@ -63,7 +61,7 @@ jobs:
             echo "Repository: ${REPOSITORY}"
             echo "Image Tag: ${IMAGE_TAG}"
 
-            # Check that AWS credentials are set (do not print full values)
+            # Check that AWS credentials are set (values themselves will be masked)
             if [ -z "$AWS_ACCESS_KEY_ID" ]; then
               echo "AWS_ACCESS_KEY_ID is NOT set"
             else
