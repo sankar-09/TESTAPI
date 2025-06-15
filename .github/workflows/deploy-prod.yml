@@ -84,4 +84,5 @@ jobs:
 
             # Pull the latest Docker image and run it
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-            sudo docker run -d --name myappcontainer -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+            sudo docker run -d --name myappcontainer   -p 3000:3000   -e ACCESS_TOKEN_KEY=${{ secrets.ACCESS_TOKEN_KEY }}   ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+            
