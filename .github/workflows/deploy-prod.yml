@@ -11,19 +11,20 @@ env:
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   PRIVATE_SSH_KEY: ${{ secrets.AWS_SSH_KEY }}
   SERVER_PUBLIC_IP: ${{ secrets.AWS_PUBLIC_IP }}
+  # DOTENV secret should hold your complete .env file content.
+  DOTENV: ${{ secrets.DOTENV }}
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout 
         uses: actions/checkout@v3
 
       - name: Login to AWS ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        # This step doesn't output variables, so we define the registry manually.
 
       - name: Build and Push Docker Image
         env:
@@ -37,7 +38,7 @@ jobs:
           echo "Pushing Docker image…"
           docker push $REGISTRY/$REPOSITORY:latest
 
-      - name: Deploy Docker Image to EC2
+      - name: Deploy Container on EC2
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
@@ -48,33 +49,41 @@ jobs:
             REGISTRY="166799231300.dkr.ecr.eu-north-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
-
+            
             echo "Registry: ${REGISTRY}"
             echo "Repository: ${REPOSITORY}"
             echo "Image Tag: ${IMAGE_TAG}"
 
-            # Update packages and install Docker and AWS CLI using yum.
+            # Update packages and install Docker and AWS CLI.
+            echo "Updating system packages..."
             sudo yum update -y
+            echo "Installing Docker and AWS CLI..."
             sudo yum install -y docker aws-cli
-
-            # Start Docker service.
+            echo "Starting Docker service..."
             sudo systemctl start docker
+            sudo systemctl enable docker
 
-            # Authenticate Docker to your registry using the AWS CLI.
+            # Authenticate Docker to AWS ECR.
+            echo "Logging into ECR..."
             aws ecr get-login-password --region eu-north-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
 
-            # Clean up any previously running container.
-            sudo docker stop myappcontainer || true
-            sudo docker rm myappcontainer || true
+            # Clean up any previously running container named 'api'.
+            echo "Stopping and removing any existing container named 'api'..."
+            sudo docker stop api || true
+            sudo docker rm api || true
 
-            # Create the .env file on the EC2 instance using the DOTENV secret.
-            echo "${{ secrets.DOTENV }}" > $(pwd)/.env
-
-            # Optionally display the content for debugging (remove in production).
-            cat $(pwd)/.env
+            # Create the environment file in the home directory.
+            echo "Creating environment file at /home/ec2-user/TESTAPI.env..."
+            echo "${{ secrets.DOTENV }}" > /home/ec2-user/TESTAPI.env
+            echo "Contents of /home/ec2-user/TESTAPI.env:"
+            cat /home/ec2-user/TESTAPI.env
 
             # Pull the latest Docker image.
+            echo "Pulling Docker image..."
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
 
-            # Run the container using the .env file.
-            sudo docker run -d --name myappcontainer --env-file $(pwd)/.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+            # Run the container using the environment file.
+            echo "Running container 'api'..."
+            sudo docker run -d --name api --env-file /home/ec2-user/TESTAPI.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+
+            echo "Deployment complete."
