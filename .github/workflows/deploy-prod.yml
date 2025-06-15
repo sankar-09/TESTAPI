@@ -23,11 +23,11 @@ jobs:
       - name: Login to AWS ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        # (This step doesn’t output variables we need, so we set the registry manually.)
+        # Note: This step outputs no variables we need; the registry is defined manually.
 
       - name: Build and Push Docker Image
         env:
-          # Populate the registry manually as the output might be empty.
+          # Manually set the registry and repository.
           REGISTRY: 166799231300.dkr.ecr.eu-north-1.amazonaws.com
           REPOSITORY: aws-deploy
         run: |
@@ -44,15 +44,8 @@ jobs:
           host: ${{ env.SERVER_PUBLIC_IP }}
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
-          # We omit the envs input here because we are defining the credentials explicitly within the script.
           script: |
-            # Directly set and export the AWS credentials by interpolating GitHub secrets.
-            AWS_ACCESS_KEY_ID="${{ secrets.AWS_ACCESS_KEY }}"
-            AWS_SECRET_ACCESS_KEY="${{ secrets.AWS_SECRET_ACCESS_KEY }}"
-            AWS_REGION="${{ env.AWS_REGION }}"
-            export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY AWS_REGION
-            
-            # Define explicit variables for the ECR registry and image details.
+            # Define the ECR registry and image details.
             REGISTRY="166799231300.dkr.ecr.eu-north-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
@@ -61,28 +54,25 @@ jobs:
             echo "Repository: ${REPOSITORY}"
             echo "Image Tag: ${IMAGE_TAG}"
 
-            # Check that AWS credentials are set (values themselves will be masked)
-            if [ -z "$AWS_ACCESS_KEY_ID" ]; then
-              echo "AWS_ACCESS_KEY_ID is NOT set"
-            else
-              echo "AWS_ACCESS_KEY_ID is set"
-            fi
-
-            # Update packages and install Docker and AWS CLI using yum
+            # Update packages and install Docker and AWS CLI using yum.
             sudo yum update -y
             sudo yum install -y docker aws-cli
 
-            # Start Docker using systemctl
+            # Start Docker using systemctl.
             sudo systemctl start docker
 
-            # Authenticate Docker to your registry using the AWS CLI (region hardcoded)
+            # Authenticate Docker to your registry using the AWS CLI.
             aws ecr get-login-password --region eu-north-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
 
-            # Clean up any previously running container
+            # Clean up any previously running container.
             sudo docker stop myappcontainer || true
             sudo docker rm myappcontainer || true
 
-            # Pull the latest Docker image and run it
+            # Create an env file with the required ACCESS_TOKEN_KEY.
+            echo "ACCESS_TOKEN_KEY=${{ secrets.ACCESS_TOKEN_KEY }}" > $(pwd)/TESTAPI.env
+
+            # Pull the latest Docker image.
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-            sudo docker run -d --name myappcontainer   -p 3000:3000   -e ACCESS_TOKEN_KEY=${{ secrets.ACCESS_TOKEN_KEY }}   ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
             
+            # Run the container using the env file.
+            sudo docker run -d --name myappcontainer --env-file $(pwd)/TESTAPI.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
