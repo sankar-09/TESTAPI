@@ -23,10 +23,12 @@ jobs:
       - name: Login to AWS ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
+        # (Note: This step may not produce an output variable we need, so we’ll set the registry manually.)
 
       - name: Build and Push Docker Image
         env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          # Populate the registry manually as the output might be empty.
+          REGISTRY: 166799231300.dkr.ecr.eu-north-1.amazonaws.com
           REPOSITORY: aws-deploy
         run: |
           echo "Building Docker image..."
@@ -37,37 +39,45 @@ jobs:
           docker push $REGISTRY/$REPOSITORY:latest
 
       - name: Deploy Docker Image to EC2
-        env:
-          REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          REPOSITORY: aws-deploy
-          IMAGE_TAG: latest
+        # While we define some environment variables here, we also set explicit variables inside the script.
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
-          # Pass AWS credentials to the remote host
+          # Pass AWS credentials so that the remote AWS CLI has access.
           envs: AWS_ACCESS_KEY_ID=${{ secrets.AWS_ACCESS_KEY }},AWS_SECRET_ACCESS_KEY=${{ secrets.AWS_SECRET_ACCESS_KEY }},AWS_REGION=${{ env.AWS_REGION }}
           script: |
+            # Define explicit variables for the ECR registry and image details.
+            REGISTRY="166799231300.dkr.ecr.eu-north-1.amazonaws.com"
+            REPOSITORY="aws-deploy"
+            IMAGE_TAG="latest"
+
+            echo "Registry: ${REGISTRY}"
+            echo "Repository: ${REPOSITORY}"
+            echo "Image Tag: ${IMAGE_TAG}"
+
+            # Check that AWS credentials are set (do not print the private values)
+            if [ -z "$AWS_ACCESS_KEY_ID" ]; then
+              echo "AWS_ACCESS_KEY_ID is NOT set"
+            else
+              echo "AWS_ACCESS_KEY_ID is set"
+            fi
+
             # Update packages and install Docker and AWS CLI using yum
             sudo yum update -y
             sudo yum install -y docker aws-cli
 
-            # Start the Docker service
-            sudo service docker start
+            # Start Docker using systemctl
+            sudo systemctl start docker
 
-            # Authenticate Docker to your registry using a hardcoded region to avoid variable expansion issues
-            aws ecr get-login-password --region eu-north-1 | sudo docker login --username AWS --password-stdin 166799231300.dkr.ecr.eu-north-1.amazonaws.com
+            # Authenticate Docker to your registry using the AWS CLI (with the region hardcoded)
+            aws ecr get-login-password --region eu-north-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
 
-            # Debug: output variables to ensure they are not empty
-            echo "Registry: $REGISTRY"
-            echo "Repository: $REPOSITORY"
-            echo "Image Tag: $IMAGE_TAG"
-
-            # Stop and remove any existing container (suppress error if not present)
+            # Clean up any previously running container
             sudo docker stop myappcontainer || true
             sudo docker rm myappcontainer || true
 
             # Pull the latest Docker image and run it
-            sudo docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
-            sudo docker run -d --name myappcontainer -p 3000:3000 $REGISTRY/$REPOSITORY:$IMAGE_TAG
+            sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+            sudo docker run -d --name myappcontainer -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
