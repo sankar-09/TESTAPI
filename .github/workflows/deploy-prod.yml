@@ -5,7 +5,7 @@ on:
     branches:
       - "Prod"
   schedule:
-    - cron: "0 3 * * 0"    # Every Sunday at 03:00 UTC; adjust as needed
+    - cron: "0 3 * * 0"    # Every Sunday at 3:00 UTC; adjust as needed
 
 env:
   AWS_REGION: eu-north-1
@@ -20,13 +20,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout 
         uses: actions/checkout@v3
 
       - name: Login to AWS ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        # This action logs into ECR. The registry URI is defined manually below.
 
       - name: Build and Push Docker Image
         env:
@@ -51,7 +50,7 @@ jobs:
             REGISTRY="166799231300.dkr.ecr.eu-north-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
-
+            
             echo "Registry: ${REGISTRY}"
             echo "Repository: ${REPOSITORY}"
             echo "Image Tag: ${IMAGE_TAG}"
@@ -69,20 +68,17 @@ jobs:
             echo "Logging into ECR..."
             aws ecr get-login-password --region eu-north-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
 
-            # Prune unused Docker resources to avoid conflicts and free up space.
-            echo "Pruning stopped containers..."
+            # Clean up previous resources:
+            echo "Pruning unused Docker resources..."
             sudo docker container prune -f
-            echo "Pruning unused images..."
             sudo docker image prune -a -f
-            echo "Pruning system-wide Docker resources..."
             sudo docker system prune -a -f
 
-            # Clean up any previously running container (named 'api').
             echo "Stopping and removing any existing container named 'api'..."
             sudo docker stop api || true
             sudo docker rm api || true
 
-            # Create the environment file under /home/ec2-user.
+            # Create the environment file in /home/ec2-user/.
             echo "Creating environment file at /home/ec2-user/TESTAPI.env..."
             echo "${{ secrets.DOTENV }}" > /home/ec2-user/TESTAPI.env
             echo "Contents of /home/ec2-user/TESTAPI.env:"
@@ -92,8 +88,8 @@ jobs:
             echo "Pulling Docker image..."
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
 
-            # Run the container with the specified environment file.
+            # Run the container with the environment file.
             echo "Running container 'api'..."
             sudo docker run -d --name api --env-file /home/ec2-user/TESTAPI.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-
+            
             echo "Deployment complete."
