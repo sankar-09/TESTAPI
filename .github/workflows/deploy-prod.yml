@@ -23,19 +23,18 @@ jobs:
       - name: Login to AWS ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v1
-        # Note: This step outputs no variables we need; the registry is defined manually.
+        # This step doesn't output variables, so we define the registry manually.
 
       - name: Build and Push Docker Image
         env:
-          # Manually set the registry and repository.
           REGISTRY: 166799231300.dkr.ecr.eu-north-1.amazonaws.com
           REPOSITORY: aws-deploy
         run: |
-          echo "Building Docker image..."
+          echo "Building Docker image…"
           docker build -t aws-deploy .
-          echo "Tagging Docker image..."
+          echo "Tagging Docker image…"
           docker tag aws-deploy:latest $REGISTRY/$REPOSITORY:latest
-          echo "Pushing Docker image..."
+          echo "Pushing Docker image…"
           docker push $REGISTRY/$REPOSITORY:latest
 
       - name: Deploy Docker Image to EC2
@@ -45,7 +44,7 @@ jobs:
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
           script: |
-            # Define the ECR registry and image details.
+            # Define ECR registry and image details.
             REGISTRY="166799231300.dkr.ecr.eu-north-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
@@ -58,7 +57,7 @@ jobs:
             sudo yum update -y
             sudo yum install -y docker aws-cli
 
-            # Start Docker using systemctl.
+            # Start Docker service.
             sudo systemctl start docker
 
             # Authenticate Docker to your registry using the AWS CLI.
@@ -68,8 +67,14 @@ jobs:
             sudo docker stop myappcontainer || true
             sudo docker rm myappcontainer || true
 
+            # Create the .env file on the EC2 instance using the DOTENV secret.
+            echo "${{ secrets.DOTENV }}" > $(pwd)/.env
+
+            # Optionally display the content for debugging (remove in production).
+            cat $(pwd)/.env
+
             # Pull the latest Docker image.
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-            
-            # Run the container using the env file.
-            sudo docker run -d --name myappcontainer --env-file $(pwd)/myappcontainer.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+
+            # Run the container using the .env file.
+            sudo docker run -d --name myappcontainer --env-file $(pwd)/.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
