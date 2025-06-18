@@ -87,9 +87,10 @@ jobs:
 
             echo "Starting new container..."
             sudo docker run -d \
+            --restart always \
               --name api \
               --env-file /home/ec2-user/TESTAPI.env \
               -p 3000:3000 \
               ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
 
-            echo "✅ Deployment complete!"
+            echo "Deployment complete!"
