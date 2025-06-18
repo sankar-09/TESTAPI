@@ -3,7 +3,7 @@ name: Deploy to AWS
 on:
   push:
     branches:
-      - "Production"  # With Redis
+      - "Production" # With Redis
   schedule:
     - cron: "0 3 * * 0"  # Run every Sunday at 03:00 UTC (adjust as needed)
 
@@ -28,14 +28,13 @@ jobs:
           echo "Downloading AWS CLI installer..."
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
           unzip -o awscliv2.zip
-          echo "Running AWS CLI installer with --update flag..."
+          echo "Installing/Updating AWS CLI..."
           sudo ./aws/install --update
-          echo "AWS CLI version:"
-          aws --version
+          echo "AWS CLI version: $(aws --version)"
 
       - name: Authenticate to AWS ECR
         run: |
-          echo "Authenticating to AWS ECR in ap-south-1..."
+          echo "Authenticating to AWS ECR..."
           aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 166799231300.dkr.ecr.ap-south-1.amazonaws.com
 
       - name: Build, Tag & Push Docker Image
@@ -60,31 +59,36 @@ jobs:
           key: ${{ env.PRIVATE_SSH_KEY }}
           script: |
             set -euo pipefail
-            # Define ECR registry and image details.
+            # Define variables for registry and image details.
             REGISTRY="166799231300.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
-
+            
             echo "Registry: ${REGISTRY}"
             echo "Repository: ${REPOSITORY}"
             echo "Image Tag: ${IMAGE_TAG}"
-
+            
             echo "Updating system packages..."
             sudo yum update -y
             
-            echo "Installing Docker, AWS CLI, and Redis..."
-            sudo yum install -y docker aws-cli redis
-            
+            echo "Installing Docker and AWS CLI..."
+            sudo yum install -y docker aws-cli
+
             echo "Starting and enabling Docker service..."
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            echo "Starting and enabling Redis service..."
-            sudo systemctl start redis
-            sudo systemctl enable redis
+            # Instead of installing Redis via YUM, launch Redis as a Docker container.
+            echo "Starting Redis container via Docker..."
+            if sudo docker container inspect redis-instance >/dev/null 2>&1; then
+              echo "Redis container already exists. Restarting..."
+              sudo docker restart redis-instance
+            else
+              sudo docker run -d --name redis-instance --restart always -p 6379:6379 redis:alpine
+            fi
 
-            echo "Verifying Redis status..."
-            redis-cli ping || echo "Redis is not running!"
+            echo "Verifying Redis in the container..."
+            sudo docker exec redis-instance redis-cli ping || echo "Redis container is not running!"
 
             echo "Authenticating to AWS ECR on EC2..."
             aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
@@ -102,11 +106,11 @@ jobs:
             echo "${DOTENV}" | sudo tee /home/ec2-user/TESTAPI.env
             echo "Contents of /home/ec2-user/TESTAPI.env:"
             cat /home/ec2-user/TESTAPI.env
-
+            
             echo "Pulling the latest Docker image..."
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
 
             echo "Running container 'api' with restart always..."
             sudo docker run -d --name api --restart always --env-file /home/ec2-user/TESTAPI.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-
+            
             echo "Deployment complete!"
