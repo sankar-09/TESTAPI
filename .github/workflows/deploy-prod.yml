@@ -58,12 +58,17 @@ jobs:
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
           script: |
-            set -euo pipefail
-            # Export AWS credentials explicitly in the remote session
-            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID}"
-            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY}"
+            set -eo pipefail
+
+            # Export AWS credentials, with an explicit check.
+            export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}"
+            export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}"
             export AWS_DEFAULT_REGION="ap-south-1"
-            
+            if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
+              echo "Error: AWS credentials are not set."
+              exit 1
+            fi
+
             # Define variables for registry and image details.
             REGISTRY="166799231300.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
