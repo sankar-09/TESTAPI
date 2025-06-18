@@ -20,23 +20,33 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout 
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Login to AWS ECR
-        id: login-ecr
-        uses: aws-actions/amazon-ecr-login@v1
+      - name: Install Latest AWS CLI
+        run: |
+          echo "Downloading AWS CLI..."
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
+          aws --version
 
-      - name: Build and Push Docker Image
+      - name: Authenticate to AWS ECR
+        run: |
+          aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 166799231300.dkr.ecr.ap-south-1.amazonaws.com
+
+      - name: Build, Tag & Push Docker Image
         env:
-          REGISTRY: 166799231300.dkr.ecr.eu-north-1.amazonaws.com
+          REGISTRY: 166799231300.dkr.ecr.ap-south-1.amazonaws.com
           REPOSITORY: aws-deploy
         run: |
           echo "Building Docker image..."
           docker build -t aws-deploy .
+          
           echo "Tagging Docker image..."
           docker tag aws-deploy:latest $REGISTRY/$REPOSITORY:latest
-          echo "Pushing Docker image..."
+          
+          echo "Pushing Docker image to AWS ECR..."
           docker push $REGISTRY/$REPOSITORY:latest
 
       - name: Deploy Container on EC2 (Setup System & Run API)
@@ -47,7 +57,7 @@ jobs:
           key: ${{ env.PRIVATE_SSH_KEY }}
           script: |
             # Define ECR registry and image details.
-            REGISTRY="166799231300.dkr.ecr.eu-north-1.amazonaws.com"
+            REGISTRY="166799231300.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
 
@@ -75,7 +85,7 @@ jobs:
             echo "Checking Redis status..."
             redis-cli ping || echo "Redis is not running!"
 
-            # Log in to ECR
+            # Authenticate to ECR on EC2
             echo "Logging into ECR..."
             aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
 
