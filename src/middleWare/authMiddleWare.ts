@@ -1,11 +1,17 @@
 // src/middleware/authMiddleware.ts
 import { Request, Response, NextFunction } from "express";
-import jwt from "jsonwebtoken";
+import jwt, { JwtPayload } from "jsonwebtoken";
 import dotenv from "dotenv";
+
 dotenv.config();
-const ACCESS_TOKEN_KEY = process.env.ACCESS_TOKEN_KEY as string;
+
+const ACCESS_TOKEN_KEY = process.env.ACCESS_TOKEN_KEY as string ;
+if (!ACCESS_TOKEN_KEY) {
+  throw new Error("ACCESS_TOKEN_KEY is missing in .env");
+}
+
 interface AuthenticatedRequest extends Request {
-  user?: any;
+  user?: JwtPayload;
 }
 
 export function authenticateToken(
@@ -17,17 +23,18 @@ export function authenticateToken(
   const token = authHeader && authHeader.split(" ")[1];
 
   if (!token) {
-    return res.json({ status: 1, result: "Access denied. No token provided." });
-
+    return res
+      .status(401)
+      .json({ message: "Access denied. No token provided." });
   }
 
-  jwt.verify(token, ACCESS_TOKEN_KEY, (err, user) => {
+  jwt.verify(token, ACCESS_TOKEN_KEY, (err, decoded) => {
     if (err) {
-      res.json({ status: 1, result: "Invalid or expired token." });
-
+      // console.log("JWT verification error:", err);
+      return res.status(403).json({ message: "Invalid or expired token." });
     }
 
-    req.user = user;
+    req.user = decoded as JwtPayload;
     next();
   });
 }

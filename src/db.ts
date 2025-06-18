@@ -11,7 +11,8 @@ const MYSQL_CONFIG = {
   password: "Locate@2025",
   database: "u303037170_projectadmin",
   waitForConnections: true,
-  connectionLimit: 10,
+  connectionLimit: 1000,
+  enableKeepAlive: true, // important
 };
 export const pool = mysql.createPool(MYSQL_CONFIG);
 
@@ -26,10 +27,9 @@ const transport = new DailyRotateFile({
   dirname: logsDir,
   filename: "logs_%DATE%.log",
   datePattern: "DD-MM-YYYY",
-  maxSize: process.env.LOG_MAX_SIZE || "10k",  // Use lower-case if necessary, or "10240"
+  maxSize: process.env.LOG_MAX_SIZE || "300m",
   maxFiles: process.env.LOG_MAX_FILES || "1d",
   zippedArchive: false,
-  // Optionally, enable auditing to track rotations
   auditFile: path.join(logsDir, ".audit.json"),
 });
 
@@ -53,7 +53,39 @@ function logToFile(data: {
   logger.info(data);
 }
 
-// Query executor
+async function safeExecute(
+  conn: PoolConnection,
+  query: string,
+  params: any[]
+): Promise<any> {
+  try {
+    const [result] = await conn.execute(query, params);
+    return result;
+  } catch (err: any) {
+    // Check for transient errors including a closed connection.
+    if (
+      err.code === "ECONNRESET" ||
+      err.code === "ECONNREFUSED" ||
+      (err.message && err.message.includes("Can't add new command when connection is in closed state"))
+    ) {
+      logger.warn("Transient error detected. Retrying query with a new connection.");
+      const newConn = await pool.getConnection();
+      try {
+        const [result] = await newConn.execute(query, params);
+        return result;
+      } finally {
+        newConn.release();
+      }
+    }
+    logger.error({
+      message: `Error in safeExecute: ${err.toString()}`,
+      query,
+      params,
+    });
+    throw err;
+  }
+}
+
 export async function executeDbQuery(
   query: string,
   params: any[],
@@ -75,9 +107,10 @@ export async function executeDbQuery(
       }
     }
 
-    const [result] = await conn.execute(query, params);
+    // Execute the query using safeExecute.
+    const result = await safeExecute(conn, query, params);
 
-    // Commit only if we started the transaction ourselves.
+    // Commit if we've started a transaction.
     if (localConnection && useTransaction) {
       await conn.commit();
     }
@@ -88,9 +121,7 @@ export async function executeDbQuery(
       queryExecuted: query,
       params,
       executionTime: Date.now() - start,
-      resultCount: Array.isArray(result)
-        ? result.length
-        : (result as any).affectedRows,
+      resultCount: Array.isArray(result) ? result.length : (result as any).affectedRows,
       port,
     });
 
@@ -119,6 +150,4 @@ export async function executeDbQuery(
   }
 }
 
-
-// Export the logger for use in other parts of your application
 export { logger };

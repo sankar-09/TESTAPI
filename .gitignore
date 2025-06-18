@@ -10,7 +10,7 @@ out/
 *.tsbuildinfo
 
 # Environment variables
-.env
+
 .env.*.local
 
 # Logs

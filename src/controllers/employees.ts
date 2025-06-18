@@ -46,6 +46,7 @@ class EmployeeController {
   async createEmployee(req: Request, res: Response) {
     const apiName = "employee/create";
     const port: number = req.socket.localPort!;
+    const userId = req.headers["userid"] || "";
     const input = req.body;
     let connection;
     try {
@@ -71,7 +72,7 @@ class EmployeeController {
 
       // Insert employee record – note the column order follows the EMPLOYEES table definition.
       const insertQuery = `INSERT INTO EMPLOYEES (CITY_ID, ROLE, EMPLOYEE_ID, NAME, SURNAME, FATHER_NAME, GENDER, DOB, EMAIL, MOBILE_NUMBER, ALTERNATE_NUMBER, ADDRESS, STATUS, IMAGE_URL, PASSWORD, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
-      const params = [input.CITY_ID, input.ROLE, newEmpId, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.EMAIL, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.ADDRESS, input.STATUS, image_url, input.PASSWORD, input.CREATED_BY ];
+      const params = [input.CITY_ID, input.ROLE, newEmpId, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.EMAIL, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.ADDRESS, input.STATUS, image_url, input.PASSWORD, userId ];
       const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
       await connection.commit();
       res.json({ status: 0, result: { message: "Employee created", employeeId: newEmpId, affectedRows: result.affectedRows, },
@@ -116,6 +117,7 @@ class EmployeeController {
   async updateEmployee(req: Request, res: Response) {
     const apiName = "employee/update";
     const port: number = req.socket.localPort!;
+    const userId = req.headers["userid"] || "";
     const input = req.body;
     let connection: any;
     connection = await pool.getConnection();
@@ -124,7 +126,7 @@ class EmployeeController {
       // Upload new image if provided (or reuse current image)
       const image_url = await uploadImage(input.IMAGE_URL);
       const updateQuery = `UPDATE EMPLOYEES SET CITY_ID = ?, ROLE = ?, NAME = ?, SURNAME = ?, FATHER_NAME = ?, GENDER = ?, DOB = ?, EMAIL = ?, MOBILE_NUMBER = ?, ALTERNATE_NUMBER = ?, ADDRESS = ?, STATUS = ?, IMAGE_URL = ?, PASSWORD = ?, EDITED_BY = ? WHERE EMPLOYEE_ID = ?`;
-      const params = [ input.CITY_ID, input.ROLE, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.EMAIL, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.ADDRESS, input.STATUS, image_url, input.PASSWORD, input.EDITED_BY, input.EMPLOYEE_ID];
+      const params = [ input.CITY_ID, input.ROLE, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.EMAIL, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.ADDRESS, input.STATUS, image_url, input.PASSWORD, userId, input.EMPLOYEE_ID];
       await executeDbQuery(updateQuery, params, true, apiName, port);
       await connection.commit();
       res.json({ status: 0, result: { message: "Employee updated" } });
@@ -138,7 +140,7 @@ class EmployeeController {
 
   //----------------------Role End Points----------------------------//
   async createRole(req: Request, res: Response) {
-    const apiName = "role/create"; const port = req.socket.localPort!; const input = req.body; let connection;
+    const apiName = "role/create"; const port = req.socket.localPort!; const input = req.body; let connection; const userId = req.headers["userid"] || "";
     try {
       connection = await pool.getConnection(); await connection.beginTransaction();
 
@@ -153,7 +155,7 @@ class EmployeeController {
       const maxIdResult = await executeDbQuery("SELECT IFNULL(MAX(ROLE_ID), 1110) AS maxId FROM ROLES", [], false, apiName, port, connection);
       const newId = Number(maxIdResult[0]?.maxId || 1110) + 1;
       const insertQuery = `INSERT INTO ROLES (CITY_ID, ROLE_ID, ROLE_NAME, DESCRIPTION, STATUS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?)`;
-      const params = [input.city_id, newId, input.role_name, input.description, input.status, input.created_by];
+      const params = [input.city_id, newId, input.role_name, input.description, input.status, userId];
       const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
       await connection.commit();
       const results = {message: "Role created", roleId: newId, affectedRows: result.affectedRows};
@@ -178,10 +180,10 @@ class EmployeeController {
 
 
   async updateRole(req: Request, res: Response) {
-    const apiName = "role/update"; const port = req.socket.localPort!; const input = req.body;
+    const apiName = "role/update"; const port = req.socket.localPort!; const input = req.body; const userId = req.headers["userid"] || "";
 
     const query = `UPDATE ROLES SET CITY_ID = ?, ROLE_NAME = ?, DESCRIPTION = ?, STATUS = ?, UPDATED_BY = ? WHERE ROLE_ID = ?`;
-    const params = [input.city_id, input.role_name, input.description, input.status, input.updated_by, input.role_id];
+    const params = [input.city_id, input.role_name, input.description, input.status, userId, input.role_id];
     try {
       const result = await executeDbQuery(query, params, true, apiName, port);
       const results = {message: "Role updated"};
