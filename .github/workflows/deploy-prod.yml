@@ -3,9 +3,9 @@ name: Deploy to AWS
 on:
   push:
     branches:
-      - "Production"  # With Redis
+      - "Production"
   schedule:
-    - cron: "0 3 * * 0"  # Every Sunday at 03:00 UTC (adjust as needed)
+    - cron: "0 3 * * 0" # Every Sunday at 03:00 UTC
 
 env:
   AWS_REGION: ap-south-1
@@ -23,17 +23,8 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Install/Update AWS CLI
-        run: |
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
-          unzip -o awscliv2.zip
-          sudo ./aws/install --update
-          aws --version
-
       - name: Authenticate to AWS ECR
-        run: |
-          aws ecr get-login-password --region ap-south-1 | \
-            docker login --username AWS --password-stdin 166799231300.dkr.ecr.ap-south-1.amazonaws.com
+        uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build, Tag & Push Docker Image
         env:
@@ -42,12 +33,10 @@ jobs:
         run: |
           echo "Building Docker image..."
           docker build -t aws-deploy .
-          echo "Tagging Docker image..."
           docker tag aws-deploy:latest $REGISTRY/$REPOSITORY:latest
-          echo "Pushing Docker image..."
           docker push $REGISTRY/$REPOSITORY:latest
 
-      - name: Deploy Container on EC2
+      - name: Deploy Container on EC2 (with Redis and .env)
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
@@ -56,50 +45,51 @@ jobs:
           script: |
             set -eo pipefail
 
-            # Define registry and image details.
             REGISTRY="166799231300.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
 
-            # Update and install required packages.
+            echo "Installing dependencies..."
             sudo yum update -y
             sudo yum install -y docker aws-cli
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            # Set memory overcommit (helps avoid Redis warnings).
+            echo "Ensuring Redis sysctl memory flag..."
             sudo sysctl vm.overcommit_memory=1 || true
 
-            # Launch (or restart) Redis container with sysctl setting.
+            echo "Running Redis container..."
             if sudo docker container inspect redis-instance >/dev/null 2>&1; then
               sudo docker restart redis-instance
             else
               sudo docker run -d --name redis-instance --restart always --sysctl vm.overcommit_memory=1 -p 6379:6379 redis:alpine
             fi
 
-            sudo docker exec redis-instance redis-cli ping || echo "Redis container unavailable"
+            echo "Checking Redis health..."
+            sudo docker exec redis-instance redis-cli ping || echo "Redis container not ready"
 
-            # Log in to ECR on the EC2 instance.
-            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
-
-            # Clean up any previous Docker resources.
+            echo "Pruning Docker resources..."
             sudo docker container prune -f || true
             sudo docker image prune -a -f || true
             sudo docker system prune -a -f || true
+
+            echo "Stopping previous API container..."
             sudo docker stop api || true
             sudo docker rm api || true
 
-            # Create the environment file using the DOTENV secret.
-            echo "${{ secrets.DOTENV }}" > /home/ec2-user/TESTAPI.env
-            echo "Contents of /home/ec2-user/TESTAPI.env:"
-            cat /home/ec2-user/TESTAPI.env
+            echo "Creating .env file..."
+            echo "${{ secrets.DOTENV }}" | sudo tee /home/ec2-user/TESTAPI.env > /dev/null
+            echo "Environment file created at /home/ec2-user/TESTAPI.env"
 
-            # Pull and run the API container using the environment file.
+            echo "Pulling latest image from ECR..."
+            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-            sudo docker run -d --name api --env-file /home/ec2-user/TESTAPI.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-            
-            echo "Deployment complete!"
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: ap-south-1
+
+            echo "Starting new container..."
+            sudo docker run -d \
+              --name api \
+              --env-file /home/ec2-user/TESTAPI.env \
+              -p 3000:3000 \
+              ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+
+            echo "✅ Deployment complete!"
