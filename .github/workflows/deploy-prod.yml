@@ -3,7 +3,7 @@ name: Deploy to AWS
 on:
   push:
     branches:
-      - "Production" # With Redis
+      - "Production"  # With Redis
   schedule:
     - cron: "0 3 * * 0"  # Run every Sunday at 03:00 UTC (adjust as needed)
 
@@ -23,16 +23,19 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Install Latest AWS CLI
+      - name: Install/Update AWS CLI
         run: |
-          echo "Downloading AWS CLI..."
+          echo "Downloading AWS CLI installer..."
           curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-          unzip awscliv2.zip
-          sudo ./aws/install
+          unzip -o awscliv2.zip
+          echo "Running AWS CLI installer with --update flag..."
+          sudo ./aws/install --update
+          echo "AWS CLI version:"
           aws --version
 
       - name: Authenticate to AWS ECR
         run: |
+          echo "Authenticating to AWS ECR in ap-south-1..."
           aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 166799231300.dkr.ecr.ap-south-1.amazonaws.com
 
       - name: Build, Tag & Push Docker Image
@@ -56,6 +59,7 @@ jobs:
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
           script: |
+            set -euo pipefail
             # Define ECR registry and image details.
             REGISTRY="166799231300.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
@@ -65,52 +69,44 @@ jobs:
             echo "Repository: ${REPOSITORY}"
             echo "Image Tag: ${IMAGE_TAG}"
 
-            # Update system packages & Install required dependencies
             echo "Updating system packages..."
             sudo yum update -y
+            
             echo "Installing Docker, AWS CLI, and Redis..."
             sudo yum install -y docker aws-cli redis
-
-            # Start & Enable Docker Service
-            echo "Starting Docker service..."
+            
+            echo "Starting and enabling Docker service..."
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            # Start & Enable Redis Service
-            echo "Starting Redis service..."
+            echo "Starting and enabling Redis service..."
             sudo systemctl start redis
             sudo systemctl enable redis
 
-            # Verify Redis is running
-            echo "Checking Redis status..."
+            echo "Verifying Redis status..."
             redis-cli ping || echo "Redis is not running!"
 
-            # Authenticate to ECR on EC2
-            echo "Logging into ECR..."
+            echo "Authenticating to AWS ECR on EC2..."
             aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
 
-            # Clean up previous containers & images
             echo "Pruning unused Docker resources..."
-            sudo docker container prune -f
-            sudo docker image prune -a -f
-            sudo docker system prune -a -f
+            sudo docker container prune -f || true
+            sudo docker image prune -a -f || true
+            sudo docker system prune -a -f || true
 
             echo "Stopping and removing any existing container named 'api'..."
             sudo docker stop api || true
             sudo docker rm api || true
 
-            # Create the environment file in /home/ec2-user/
             echo "Creating environment file at /home/ec2-user/TESTAPI.env..."
-            echo "${{ secrets.DOTENV }}" > /home/ec2-user/TESTAPI.env
+            echo "${DOTENV}" | sudo tee /home/ec2-user/TESTAPI.env
             echo "Contents of /home/ec2-user/TESTAPI.env:"
             cat /home/ec2-user/TESTAPI.env
 
-            # Pull the latest Docker image
-            echo "Pulling Docker image..."
+            echo "Pulling the latest Docker image..."
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
 
-            # Run the API container with Redis connection & Restart policy
-            echo "Running container 'api'..."
+            echo "Running container 'api' with restart always..."
             sudo docker run -d --name api --restart always --env-file /home/ec2-user/TESTAPI.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
 
             echo "Deployment complete!"
