@@ -18,37 +18,33 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
 
       - name: Install/Update AWS CLI
         run: |
-          echo "Downloading AWS CLI installer..."
-          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip
           unzip -o awscliv2.zip
-          echo "Installing/Updating AWS CLI..."
           sudo ./aws/install --update
-          echo "AWS CLI version: $(aws --version)"
+          aws --version
 
       - name: Authenticate to AWS ECR
         run: |
-          echo "Authenticating to AWS ECR..."
-          aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 166799231300.dkr.ecr.ap-south-1.amazonaws.com
+          aws ecr get-login-password --region ap-south-1 | \
+            docker login --username AWS --password-stdin 166799231300.dkr.ecr.ap-south-1.amazonaws.com
 
       - name: Build, Tag & Push Docker Image
         env:
           REGISTRY: 166799231300.dkr.ecr.ap-south-1.amazonaws.com
           REPOSITORY: aws-deploy
         run: |
-          echo "Building Docker image..."
           docker build -t aws-deploy .
-          echo "Tagging Docker image..."
           docker tag aws-deploy:latest $REGISTRY/$REPOSITORY:latest
-          echo "Pushing Docker image to AWS ECR..."
           docker push $REGISTRY/$REPOSITORY:latest
 
-      - name: Deploy Container on EC2 (Setup System & Run API)
+      - name: Deploy Container on EC2
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
@@ -57,73 +53,55 @@ jobs:
           script: |
             set -eo pipefail
 
-            # Export AWS credentials explicitly in the remote session.
+            # Export AWS CLI credentials (ensuring they aren’t empty)
             export AWS_ACCESS_KEY_ID="${AWS_ACCESS_KEY_ID:-}"
             export AWS_SECRET_ACCESS_KEY="${AWS_SECRET_ACCESS_KEY:-}"
             export AWS_DEFAULT_REGION="ap-south-1"
             if [ -z "$AWS_ACCESS_KEY_ID" ] || [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
-              echo "Error: AWS credentials are not set."
-              exit 1
+              echo "Error: AWS credentials are not set." && exit 1
             fi
 
-            # Define variables for registry and image details.
+            # Define registry and image detail variables.
             REGISTRY="166799231300.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
-            
-            echo "Registry: ${REGISTRY}"
-            echo "Repository: ${REPOSITORY}"
-            echo "Image Tag: ${IMAGE_TAG}"
-            
-            echo "Updating system packages..."
+
+            # Update system and install required packages.
             sudo yum update -y
-            
-            echo "Installing Docker and AWS CLI..."
             sudo yum install -y docker aws-cli
-            
-            echo "Starting and enabling Docker service..."
             sudo systemctl start docker
             sudo systemctl enable docker
-            
-            # Set memory overcommit to fix Redis warning.
-            echo "Setting vm.overcommit_memory to 1..."
+
+            # Set memory overcommit to avoid Redis warnings.
             sudo sysctl vm.overcommit_memory=1 || true
-            
-            # Launch Redis as a Docker container with the sysctl flag.
-            echo "Starting Redis container via Docker..."
+
+            # Launch (or restart) Redis container with the proper sysctl flag.
             if sudo docker container inspect redis-instance >/dev/null 2>&1; then
-              echo "Redis container already exists. Restarting..."
               sudo docker restart redis-instance
             else
               sudo docker run -d --name redis-instance --restart always --sysctl vm.overcommit_memory=1 -p 6379:6379 redis:alpine
             fi
-            
-            echo "Verifying Redis in the container..."
-            sudo docker exec redis-instance redis-cli ping || echo "Redis container is not running!"
-            
-            echo "Authenticating to AWS ECR on EC2..."
+
+            # Verify Redis connectivity.
+            sudo docker exec redis-instance redis-cli ping || echo "Redis container unavailable"
+
+            # Authenticate to ECR.
             aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
-            
-            echo "Pruning unused Docker resources..."
+
+            # Clean up unused Docker resources and remove any prior container.
             sudo docker container prune -f || true
             sudo docker image prune -a -f || true
             sudo docker system prune -a -f || true
-            
-            echo "Stopping and removing any existing container named 'api'..."
             sudo docker stop api || true
             sudo docker rm api || true
-            
-            echo "Creating environment file at /home/ec2-user/TESTAPI.env..."
+
+            # Create (or update) the environment file.
             echo "${DOTENV}" | sudo tee /home/ec2-user/TESTAPI.env
-            echo "Contents of /home/ec2-user/TESTAPI.env:"
-            cat /home/ec2-user/TESTAPI.env
-            
-            echo "Pulling the latest Docker image..."
+
+            # Pull and run the latest Docker image.
             sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-            
-            echo "Running container 'api' with restart always..."
             sudo docker run -d --name api --env-file /home/ec2-user/TESTAPI.env -p 3000:3000 ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
-            
+
             echo "Deployment complete!"
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY }}
