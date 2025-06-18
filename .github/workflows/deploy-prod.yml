@@ -23,14 +23,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: Install Latest AWS CLI & Docker
+      - name: Install Latest AWS CLI
         run: |
-          echo "Installing latest AWS CLI..."
-          sudo apt-get update -y
-          sudo apt-get install -y awscli
-          echo "Installing latest Docker..."
-          sudo apt-get install -y docker.io
-          docker --version
+          echo "Downloading AWS CLI..."
+          curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          unzip awscliv2.zip
+          sudo ./aws/install
           aws --version
 
       - name: Authenticate to AWS ECR
