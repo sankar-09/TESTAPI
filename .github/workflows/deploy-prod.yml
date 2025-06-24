@@ -23,17 +23,26 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v3
 
+      # Although you already have an authentication step using the action, we add
+      # an explicit login in the build-push step to ensure you're using the latest AWS CLI.
       - name: Authenticate to AWS ECR
         uses: aws-actions/amazon-ecr-login@v1
 
       - name: Build, Tag & Push Docker Image
         env:
-          REGISTRY: 166799231300.dkr.ecr.ap-south-1.amazonaws.com
+          REGISTRY: 457812001242.dkr.ecr.ap-south-1.amazonaws.com
           REPOSITORY: aws-deploy
         run: |
+          echo "Authenticating Docker client to AWS ECR..."
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} | docker login --username AWS --password-stdin $REGISTRY
+
           echo "Building Docker image..."
           docker build -t aws-deploy .
+          
+          echo "Tagging Docker image..."
           docker tag aws-deploy:latest $REGISTRY/$REPOSITORY:latest
+          
+          echo "Pushing Docker image to ECR..."
           docker push $REGISTRY/$REPOSITORY:latest
 
       - name: Deploy Container on EC2 (with Redis and .env)
@@ -45,25 +54,24 @@ jobs:
           script: |
             set -eo pipefail
 
-            REGISTRY="166799231300.dkr.ecr.ap-south-1.amazonaws.com"
+            REGISTRY="457812001242.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
             IMAGE_TAG="latest"
 
-            echo "Installing Docker and AWS CLI..."
+            echo "Installing dependencies..."
             sudo yum update -y
             sudo yum install -y docker aws-cli
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            echo "Setting overcommit_memory=1 at host level..."
-            echo 'vm.overcommit_memory=1' | sudo tee -a /etc/sysctl.conf
-            sudo sysctl -p
+            echo "Ensuring Redis sysctl memory flag..."
+            sudo sysctl vm.overcommit_memory=1 || true
 
-            echo "Starting Redis container..."
+            echo "Running Redis container..."
             if sudo docker container inspect redis-instance >/dev/null 2>&1; then
               sudo docker restart redis-instance
             else
-              sudo docker run -d --name redis-instance --restart always -p 6379:6379 redis:alpine
+              sudo docker run -d --name redis-instance --restart always --sysctl vm.overcommit_memory=1 -p 6379:6379 redis:alpine
             fi
 
             echo "Checking Redis health..."
@@ -82,18 +90,16 @@ jobs:
             echo "${{ secrets.DOTENV }}" | sudo tee /home/ec2-user/TESTAPI.env > /dev/null
             echo "Environment file created at /home/ec2-user/TESTAPI.env"
 
-            echo "Logging into ECR..."
-            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin ${REGISTRY}
-
             echo "Pulling latest image from ECR..."
-            sudo docker pull ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+            aws ecr get-login-password --region ${{ env.AWS_REGION }} | sudo docker login --username AWS --password-stdin $REGISTRY
+            sudo docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-            echo "Starting new API container..."
+            echo "Starting new container..."
             sudo docker run -d \
               --restart always \
               --name api \
               --env-file /home/ec2-user/TESTAPI.env \
               -p 3000:3000 \
-              ${REGISTRY}/${REPOSITORY}:${IMAGE_TAG}
+              $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
             echo "Deployment complete!"
