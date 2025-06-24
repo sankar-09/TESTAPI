@@ -61,21 +61,25 @@ jobs:
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            echo "Configuring Redis sysctl..."
-            sudo sysctl vm.overcommit_memory=1 || true
+            echo "Creating Docker network if not exists..."
+            sudo docker network inspect app-network >/dev/null 2>&1 || \
+              sudo docker network create app-network
 
-            echo "Running Redis container..."
+            echo "Running Redis container on custom network..."
             if sudo docker container inspect redis-instance >/dev/null 2>&1; then
               echo "Redis already exists. Restarting..."
               sudo docker restart redis-instance
             else
-              sudo docker run -d --name redis-instance --restart always -p 6379:6379 redis:alpine
+              sudo docker run -d --name redis-instance \
+                --network app-network \
+                --restart always \
+                -p 6379:6379 redis:alpine
             fi
 
             echo "Checking Redis health..."
             sudo docker exec redis-instance redis-cli ping || echo "Redis not ready"
 
-            echo "Cleaning up old containers..."
+            echo "Cleaning up old API container..."
             sudo docker stop api || true
             sudo docker rm api || true
             sudo docker container prune -f || true
@@ -89,12 +93,13 @@ jobs:
             aws configure set aws_secret_access_key ${{ env.AWS_SECRET_ACCESS_KEY }}
             aws configure set region ${{ env.AWS_REGION }}
 
-            echo "Pulling latest image..."
+            echo "Pulling latest Docker image..."
             aws ecr get-login-password | sudo docker login --username AWS --password-stdin $REGISTRY
             sudo docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-            echo "Starting new API container..."
+            echo "Running API container on same Docker network..."
             sudo docker run -d --restart always --name api \
+              --network app-network \
               --env-file /home/ec2-user/TESTAPI.env \
               -p 3000:3000 \
               $REGISTRY/$REPOSITORY:$IMAGE_TAG
