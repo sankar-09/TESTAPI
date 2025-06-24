@@ -61,7 +61,7 @@ jobs:
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            echo "Creating Docker network..."
+            echo "Creating Docker network if it doesn't exist..."
             if ! sudo docker network ls | grep -q app-network; then
               sudo docker network create app-network
             fi
@@ -73,9 +73,6 @@ jobs:
             else
               sudo docker run -d --name redis-instance --network app-network --restart always -p 6379:6379 redis:alpine
             fi
-
-            echo "Checking Redis health..."
-            sudo docker exec redis-instance redis-cli ping || echo "Redis not ready"
 
             echo "Cleaning up old API container..."
             sudo docker stop api || true
