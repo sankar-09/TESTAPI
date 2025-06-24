@@ -18,6 +18,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -31,7 +32,7 @@ jobs:
           REPOSITORY: aws-deploy
         run: |
           echo "Authenticating Docker client to AWS ECR..."
-          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
+          aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REGISTRY
 
           echo "Building Docker image..."
           docker build -t aws-deploy .
@@ -68,7 +69,6 @@ jobs:
             if sudo docker container inspect redis-instance >/dev/null 2>&1; then
               sudo docker restart redis-instance
             else
-              # Launch Redis container without the --sysctl flag.
               sudo docker run -d --name redis-instance --restart always -p 6379:6379 redis:alpine
             fi
 
@@ -85,14 +85,18 @@ jobs:
             sudo docker rm api || true
 
             echo "Creating .env file..."
-            echo "$DOTENV" | sudo tee /home/ec2-user/TESTAPI.env > /dev/null
+            echo "${DOTENV}" | sudo tee /home/ec2-user/TESTAPI.env > /dev/null
             echo "Environment file created at /home/ec2-user/TESTAPI.env"
 
-            echo "Pulling latest image from ECR..."
-            aws ecr get-login-password --region $AWS_REGION | sudo docker login --username AWS --password-stdin $REGISTRY
+            echo "Logging into ECR and pulling latest image..."
+            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin $REGISTRY
             sudo docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
             echo "Starting new API container..."
-            sudo docker run -d --restart always --name api --env-file /home/ec2-user/TESTAPI.env -p 3000:3000 $REGISTRY/$REPOSITORY:$IMAGE_TAG
+            sudo docker run -d --restart always \
+              --name api \
+              --env-file /home/ec2-user/TESTAPI.env \
+              -p 3000:3000 \
+              $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-            echo "Deployment complete!"
+            echo "✅ Deployment complete!"
