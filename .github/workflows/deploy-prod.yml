@@ -61,19 +61,17 @@ jobs:
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            echo "Creating Docker network if not exists..."
-            sudo docker network inspect app-network >/dev/null 2>&1 || \
+            echo "Creating Docker network..."
+            if ! sudo docker network ls | grep -q app-network; then
               sudo docker network create app-network
+            fi
 
-            echo "Running Redis container on custom network..."
+            echo "Running Redis container..."
             if sudo docker container inspect redis-instance >/dev/null 2>&1; then
               echo "Redis already exists. Restarting..."
               sudo docker restart redis-instance
             else
-              sudo docker run -d --name redis-instance \
-                --network app-network \
-                --restart always \
-                -p 6379:6379 redis:alpine
+              sudo docker run -d --name redis-instance --network app-network --restart always -p 6379:6379 redis:alpine
             fi
 
             echo "Checking Redis health..."
@@ -82,22 +80,20 @@ jobs:
             echo "Cleaning up old API container..."
             sudo docker stop api || true
             sudo docker rm api || true
-            sudo docker container prune -f || true
-            sudo docker image prune -a -f || true
 
             echo "Creating .env file..."
             echo "${{ secrets.DOTENV }}" | sudo tee /home/ec2-user/TESTAPI.env > /dev/null
 
-            echo "Setting AWS credentials for CLI..."
+            echo "Configuring AWS CLI..."
             aws configure set aws_access_key_id ${{ env.AWS_ACCESS_KEY_ID }}
             aws configure set aws_secret_access_key ${{ env.AWS_SECRET_ACCESS_KEY }}
             aws configure set region ${{ env.AWS_REGION }}
 
-            echo "Pulling latest Docker image..."
+            echo "Pulling latest image from ECR..."
             aws ecr get-login-password | sudo docker login --username AWS --password-stdin $REGISTRY
             sudo docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
-            echo "Running API container on same Docker network..."
+            echo "Starting API container..."
             sudo docker run -d --restart always --name api \
               --network app-network \
               --env-file /home/ec2-user/TESTAPI.env \
