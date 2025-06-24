@@ -18,7 +18,6 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -31,8 +30,8 @@ jobs:
           REGISTRY: 457812001242.dkr.ecr.ap-south-1.amazonaws.com
           REPOSITORY: aws-deploy
         run: |
-          echo "Authenticating Docker client to AWS ECR..."
-          aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin $REGISTRY
+          echo "Logging into ECR..."
+          aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REGISTRY
 
           echo "Building Docker image..."
           docker build -t aws-deploy .
@@ -43,14 +42,14 @@ jobs:
           echo "Pushing Docker image to ECR..."
           docker push $REGISTRY/$REPOSITORY:latest
 
-      - name: Deploy Container on EC2 (with Redis and .env)
+      - name: Deploy to EC2 and Run Containers
         uses: appleboy/ssh-action@master
         with:
           host: ${{ env.SERVER_PUBLIC_IP }}
           username: ec2-user
           key: ${{ env.PRIVATE_SSH_KEY }}
           script: |
-            set -eo pipefail
+            set -e
 
             REGISTRY="457812001242.dkr.ecr.ap-south-1.amazonaws.com"
             REPOSITORY="aws-deploy"
@@ -58,43 +57,44 @@ jobs:
 
             echo "Installing dependencies..."
             sudo yum update -y
-            sudo yum install -y docker aws-cli
+            sudo yum install -y docker awscli
             sudo systemctl start docker
             sudo systemctl enable docker
 
-            echo "Configuring host: setting vm.overcommit_memory to 1..."
+            echo "Configuring Redis sysctl..."
             sudo sysctl vm.overcommit_memory=1 || true
 
             echo "Running Redis container..."
             if sudo docker container inspect redis-instance >/dev/null 2>&1; then
+              echo "Redis already exists. Restarting..."
               sudo docker restart redis-instance
             else
               sudo docker run -d --name redis-instance --restart always -p 6379:6379 redis:alpine
             fi
 
             echo "Checking Redis health..."
-            sudo docker exec redis-instance redis-cli ping || echo "Redis container not ready"
+            sudo docker exec redis-instance redis-cli ping || echo "Redis not ready"
 
-            echo "Pruning Docker resources..."
-            sudo docker container prune -f || true
-            sudo docker image prune -a -f || true
-            sudo docker system prune -a -f || true
-
-            echo "Stopping previous API container..."
+            echo "Cleaning up old containers..."
             sudo docker stop api || true
             sudo docker rm api || true
+            sudo docker container prune -f || true
+            sudo docker image prune -a -f || true
 
             echo "Creating .env file..."
-            echo "${DOTENV}" | sudo tee /home/ec2-user/TESTAPI.env > /dev/null
-            echo "Environment file created at /home/ec2-user/TESTAPI.env"
+            echo "${{ secrets.DOTENV }}" | sudo tee /home/ec2-user/TESTAPI.env > /dev/null
 
-            echo "Logging into ECR and pulling latest image..."
-            aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin $REGISTRY
+            echo "Setting AWS credentials for CLI..."
+            aws configure set aws_access_key_id ${{ env.AWS_ACCESS_KEY_ID }}
+            aws configure set aws_secret_access_key ${{ env.AWS_SECRET_ACCESS_KEY }}
+            aws configure set region ${{ env.AWS_REGION }}
+
+            echo "Pulling latest image..."
+            aws ecr get-login-password | sudo docker login --username AWS --password-stdin $REGISTRY
             sudo docker pull $REGISTRY/$REPOSITORY:$IMAGE_TAG
 
             echo "Starting new API container..."
-            sudo docker run -d --restart always \
-              --name api \
+            sudo docker run -d --restart always --name api \
               --env-file /home/ec2-user/TESTAPI.env \
               -p 3000:3000 \
               $REGISTRY/$REPOSITORY:$IMAGE_TAG
