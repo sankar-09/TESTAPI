@@ -10,7 +10,7 @@ export default class ServiceController {
   constructor(app: Application) {
     app.use("/api/service", this.router);
  this.router.post('/bulk-upload', this.bulkUploadServicess.bind(this));
-    this.router.get("/services", authenticateToken as any,this.getAllServices.bind(this));
+    this.router.get("/services", this.getAllServices.bind(this));
     this.router.get("/servicesbyid", this.getServiceById.bind(this));
     this.router.put("/services", this.updateService.bind(this));
     this.router.post("/services", this.createService.bind(this));
