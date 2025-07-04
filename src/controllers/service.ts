@@ -3,7 +3,7 @@ import { pool, executeDbQuery } from "../db";
 import { uploadImage } from "../utils/cloudinaryUtil";
 import { authenticateToken } from "../middleWare/authMiddleWare";
 import redis from "../redis/redisClient";
-
+import { SERVICE_CACHE_TTL } from "../config/cacheConfig";
 export default class ServiceController {
   public router = express.Router();
 
@@ -160,7 +160,8 @@ export default class ServiceController {
       res.json({ status: 1, result: err.toString() });
     }
   }
-  async createService(req: Request, res: Response) {
+  
+async createService(req: Request, res: Response) {
     const apiName = "service/create";
     const port = req.socket.localPort!;
     let input = req.body;
@@ -190,6 +191,8 @@ export default class ServiceController {
 
       const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
       await connection.commit();
+      await redis.del("all_services");
+      await redis.del(`service:${newId}`);
       const results={message: "Service created", serviceId: newId, affectedRows: result.affectedRows}
       res.json({ status: 0, result:results });
 
@@ -215,8 +218,8 @@ export default class ServiceController {
     
     const query = ` SELECT CITY_ID, ID, NAME, DESCRIPTION, IMAGE_URL, STATUS, CREATED_BY, DATE_FORMAT(CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, EDITED_BY, DATE_FORMAT(EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM SERVICES `;
  const rows = await executeDbQuery(query, [], false, apiName, port);
-
-    await redis.set(cacheKey, JSON.stringify(rows), "EX", 3600); // Cache for 1 hour
+await redis.set(cacheKey, JSON.stringify(rows), "EX", SERVICE_CACHE_TTL);
+    // await redis.set(cacheKey, JSON.stringify(rows), "EX", 3600); // Cache for 1 hour
 
     // res.json({ status: 0, result: rows });
     const cached = await redis.get("all_services");
@@ -229,9 +232,9 @@ if (cached) {
     res.json({ status: 1, result: err.toString() });
   }
 }
-  
 
-  async getServiceById(req: Request, res: Response) {
+
+async getServiceById(req: Request, res: Response) {
     const apiName = "service/read";
     const port = req.socket.localPort!;
     const id = req.query.id || "";
@@ -245,27 +248,74 @@ if (cached) {
     }
   }
 
-  async updateService(req: Request, res: Response) {
+
+  // async getServiceById(req: Request, res: Response) {
+  //   const apiName = "service/read";
+  //   const port = req.socket.localPort!;
+  //   const id = req.query.id || "";
+  //   const query = ` SELECT CITY_ID, ID, NAME, DESCRIPTION, IMAGE_URL, STATUS, CREATED_BY, DATE_FORMAT(CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, EDITED_BY, DATE_FORMAT(EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM SERVICES WHERE ID = ? `;
+
+  //   try {
+  //     const rows = await executeDbQuery(query, [id], false, apiName, port);
+  //     res.json({ status: 0, result: rows });
+  //   } catch (err: any) {
+  //     res.json({ status: 1, result: err.toString() });
+  //   }
+  // }
+
+ async updateService(req: Request, res: Response) {
     const apiName = "service/update";
     const port = req.socket.localPort!;
-    let input = req.body;
+    const input = req.body;
     const userId = req.headers["userid"] || "";
-     let connection: any;
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
-    await redis.del("all_services");
-    const image_url = await uploadImage(input.IMAGE_URL);
-    const query = ` UPDATE SERVICES SET  NAME = ?, DESCRIPTION = ?, IMAGE_URL = ?, STATUS = ?, EDITED_BY = ? WHERE ID = ? `;
-    const params = [ input.NAME, input.DESCRIPTION, image_url, input.STATUS, userId, input.ID];
+    let connection;
 
     try {
-      const result = await executeDbQuery(query, params, true, apiName, port);
-       const results={ message: "Service updated"}
-      res.json({ status:  0, result:results });
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const image_url = await uploadImage(input.IMAGE_URL);
+
+      const query = `UPDATE SERVICES SET NAME=?, DESCRIPTION=?, IMAGE_URL=?, STATUS=?, EDITED_BY=? WHERE ID=?`;
+      const params = [input.NAME, input.DESCRIPTION, image_url, input.STATUS, userId, input.ID];
+
+      await executeDbQuery(query, params, true, apiName, port, connection);
+      await connection.commit();
+
+      await redis.del("all_services");
+      await redis.del(`service:${input.ID}`);
+
+      res.json({ status: 0, result: { message: "Service updated" } });
     } catch (err: any) {
+      if (connection) await connection.rollback();
       res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
     }
   }
+
+  // async updateService(req: Request, res: Response) {
+  //   const apiName = "service/update";
+  //   const port = req.socket.localPort!;
+  //   let input = req.body;
+  //   const userId = req.headers["userid"] || "";
+  //    let connection: any;
+  //   connection = await pool.getConnection();
+  //   await connection.beginTransaction();
+  //   await redis.del("all_services");
+  //   const image_url = await uploadImage(input.IMAGE_URL);
+  //   const query = ` UPDATE SERVICES SET  NAME = ?, DESCRIPTION = ?, IMAGE_URL = ?, STATUS = ?, EDITED_BY = ? WHERE ID = ? `;
+  //   const params = [ input.NAME, input.DESCRIPTION, image_url, input.STATUS, userId, input.ID];
+
+  //   try {
+  //     const result = await executeDbQuery(query, params, true, apiName, port);
+  //      const results={ message: "Service updated"}
+  //     res.json({ status:  0, result:results });
+  //   } catch (err: any) {
+  //     res.json({ status: 1, result: err.toString() });
+  //   }
+  // }
+
 
   //----------------------------Sub Service End Points------------------------//
   async createSubService(req: Request, res: Response) {
