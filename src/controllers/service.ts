@@ -349,7 +349,7 @@ async getServiceById(req: Request, res: Response) {
 
       const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
       await connection.commit();
-
+      await redis.del("all_subservices");
       res.json({ status: 0, result: { message: "Sub-service created", subServiceId: newId, affectedRows: result.affectedRows } });
     } catch (err: any) {
       if (connection) await connection.rollback();
