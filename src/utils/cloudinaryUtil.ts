@@ -31,30 +31,67 @@ cloudinary.config({
 
 
 
-export async function uploadImage(imagePath: string): Promise<string> {
-  if (!imagePath || typeof imagePath !== 'string' || imagePath.trim() === "") {
-    return "";
+export async function uploadImage(
+  imagePath: string,
+  options?: {
+    folder?: string;
+    transformations?: Array<object>;
+  }
+): Promise<string> {
+  if (!imagePath || typeof imagePath !== 'string' || imagePath.trim() === '') {
+    return '';
   }
 
-  // Skip if already hosted on Cloudinary
+  // Skip if already hosted
   const cloudinaryBase = 'https://res.cloudinary.com/';
   if (imagePath.startsWith(cloudinaryBase)) {
     return imagePath;
   }
 
+  // If it's a data URL, can still upload
+  const isDataUrl = imagePath.startsWith('data:image/');
+
   try {
-    // Upload with smart optimization
     const result = await cloudinary.uploader.upload(imagePath, {
-      folder: 'whatsapp_style',
-      transformation: [
-        { quality: 'auto:good' },   // keep quality high but optimized
-        { fetch_format: 'auto' }    // serve WebP/AVIF
+      folder: options?.folder ?? 'whatsapp_style',
+      transformation: options?.transformations ?? [
+        { quality: 'auto:good' },
+        { fetch_format: 'auto' }
       ],
       resource_type: 'image'
     });
     return result.secure_url;
   } catch (error: any) {
-    console.error("Cloudinary upload error:", error.message || error.toString());
-    return "";
+    console.error('Cloudinary upload error:', error.response?.data || error.message || error.toString());
+    return '';
   }
 }
+
+
+// export async function uploadImage(imagePath: string): Promise<string> {
+//   if (!imagePath || typeof imagePath !== 'string' || imagePath.trim() === "") {
+//     return "";
+//   }
+
+//   // Skip if already hosted on Cloudinary
+//   const cloudinaryBase = 'https://res.cloudinary.com/';
+//   if (imagePath.startsWith(cloudinaryBase)) {
+//     return imagePath;
+//   }
+
+//   try {
+//     // Upload with smart optimization
+//     const result = await cloudinary.uploader.upload(imagePath, {
+//       folder: 'whatsapp_style',
+//       transformation: [
+//         { quality: 'auto:good' },   // keep quality high but optimized
+//         { fetch_format: 'auto' }    // serve WebP/AVIF
+//       ],
+//       resource_type: 'image'
+//     });
+//     return result.secure_url;
+//   } catch (error: any) {
+//     console.error("Cloudinary upload error:", error.message || error.toString());
+//     return "";
+//   }
+// }
