@@ -177,7 +177,7 @@ export default class MobileAppServices {
     async getJobs(req: Request, res: Response) {
       const apiName = "App/Jobs";
       const port = req.socket.localPort!;
-      const query = `SELECT JOB_ID id, JOB_TITLE title, EXPERIENCE experience, JOB_TYPE type, IMAGE_URL imageUrl FROM JOBS WHERE STATUS='A' ORDER BY CREATED_ON DESC`;
+      const query = `SELECT JOB_ID id, JOB_TITLE title, EXPERIENCE experience, JOB_TYPE type, IMAGE_URL imageUrl  , 'false' AS isSaved FROM JOBS WHERE STATUS='A' ORDER BY CREATED_ON DESC`;
   
       try {
         const rows = await executeDbQuery(query, [], false, apiName, port);
