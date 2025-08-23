@@ -17,11 +17,15 @@ export default class MobileAppServices {
     this.router.get("/newsfeeds", this.getFeed.bind(this));
     this.router.get("/cielednewsfeeds", this.getcieledFeed.bind(this));
     this.router.get("/service", this.getServices.bind(this));
+    this.router.get("/services/:id/subservices", this.getSubServices.bind(this));
+// old 
     this.router.get("/subservice", this.getSubServices.bind(this));
     this.router.get("/jobs", this.getJobs.bind(this));
     this.router.get("/jobsByid", this.getJobsByid.bind(this));
     this.router.get("/bussinessprofiles", this.getbussinessProfiles.bind(this));
     this.router.get("/bussinessprofilesBySearch", this.getbussinessProfilesBySearch.bind(this));
+    this.router.get("/items/:id", this.getbussinessProfilesByid.bind(this));
+    // old 
     this.router.get("/bussinessprofilesByid", this.getbussinessProfilesByid.bind(this));
     this.router.get("/bussinessprofilesByBSids", this.getbussinessByBSids.bind(this));
     this.router.get("/adds", this.getAdds.bind(this));
@@ -165,7 +169,7 @@ export default class MobileAppServices {
   async getSubServices(req: Request, res: Response) {
     const apiName = "App/SubServices";
     const port = req.socket.localPort!;
-    const ServiceId = req.query.id || "";
+    const ServiceId = req.params.id || "";
     const query = `SELECT SUB_SERVICE_ID id, NAME subServiceName, IMAGE_URL imageUrl FROM SUB_SERVICES WHERE STATUS='A' AND SERVICE_ID = ? ORDER BY NAME`;
 
     try {
@@ -219,7 +223,7 @@ export default class MobileAppServices {
   async getbussinessProfilesByid(req: Request, res: Response) {
     const apiName = "App/BussinessProfileById";
     const port = req.socket.localPort!;
-    const BusinessId = req.query.id || "";
+    const BusinessId = req.params.id || "";
     const query = `SELECT BUSINESS_ID id, BUSINESS_NAME name, BUSINESS_TYPE type, ADDRESS address, IMAGE_URL1 imageUrl, WEEKDAY_TIMINGS timings, DEFAULT_CONTACT mobile FROM BUSSINESS_PROFILE WHERE STATUS='A' AND BUSINESS_ID=? `;
 
     try {
