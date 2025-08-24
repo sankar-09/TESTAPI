@@ -27,6 +27,8 @@ export default class MobileAppServices {
     this.router.get("/items/:id", this.getbussinessProfilesByid.bind(this));
     // old 
     this.router.get("/bussinessprofilesByid", this.getbussinessProfilesByid.bind(this));
+    this.router.get("/services/:id/items", this.getbussinessBySIids.bind(this));
+    // old
     this.router.get("/bussinessprofilesByBSids", this.getbussinessByBSids.bind(this));
     this.router.get("/adds", this.getAdds.bind(this));
     this.router.get("/addByid", this.getAddByid.bind(this));
@@ -239,6 +241,30 @@ export default class MobileAppServices {
     const port = req.socket.localPort!;
     const SubServiceID: any = req.query.SubServiceID || "";
     const ServiceId = req.query.ServiceId || "";
+    let perams = [];
+    let query = `SELECT BUSINESS_ID id, BUSINESS_NAME name, BUSINESS_TYPE type, ADDRESS address, IMAGE_URL1 imageUrl, WEEKDAY_TIMINGS timings, DEFAULT_CONTACT mobile FROM BUSSINESS_PROFILE WHERE STATUS='A'  AND SERVICE_ID=? `;
+
+    if (SubServiceID.length > 1) {
+      query += `   AND SUB_SERVICE_ID=?`;
+      perams = [ServiceId, SubServiceID];
+    } else {
+
+      perams = [ServiceId];
+    }
+
+    try {
+      const rows = await executeDbQuery(query, perams, false, apiName, port);
+      res.json({ status: 0, data: rows });
+    } catch (err: any) {
+      res.json({ status: 1, data: err.toString() });
+    }
+  }
+
+  async getbussinessBySIids(req: Request, res: Response) {
+    const apiName = "App/BussinessBySIids";
+    const port = req.socket.localPort!;
+    const SubServiceID: any = req.query.id || "";
+    const ServiceId = req.params.id || "";
     let perams = [];
     let query = `SELECT BUSINESS_ID id, BUSINESS_NAME name, BUSINESS_TYPE type, ADDRESS address, IMAGE_URL1 imageUrl, WEEKDAY_TIMINGS timings, DEFAULT_CONTACT mobile FROM BUSSINESS_PROFILE WHERE STATUS='A'  AND SERVICE_ID=? `;
 
