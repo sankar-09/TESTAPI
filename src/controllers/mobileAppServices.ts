@@ -18,18 +18,19 @@ export default class MobileAppServices {
     this.router.get("/cielednewsfeeds", this.getcieledFeed.bind(this));
     this.router.get("/service", this.getServices.bind(this));
     this.router.get("/services/:id/subservices", this.getSubServices.bind(this));
-// old 
-    this.router.get("/subservice", this.getSubServices.bind(this));
+
+    this.router.get("/subservice", this.getSubServices.bind(this)); // old 
     this.router.get("/jobs", this.getJobs.bind(this));
     this.router.get("/jobsByid", this.getJobsByid.bind(this));
     this.router.get("/bussinessprofiles", this.getbussinessProfiles.bind(this));
     this.router.get("/bussinessprofilesBySearch", this.getbussinessProfilesBySearch.bind(this));
     this.router.get("/items/:id", this.getbussinessProfilesByid.bind(this));
-    // old 
-    this.router.get("/bussinessprofilesByid", this.getbussinessProfilesByid.bind(this));
-    this.router.get("/services/:id/items", this.getbussinessBySIids.bind(this));
-    // old
-    this.router.get("/bussinessprofilesByBSids", this.getbussinessByBSids.bind(this));
+    
+    this.router.get("/bussinessprofilesByid", this.getbussinessProfilesByid.bind(this)); // old 
+    this.router.get("/services/:id/items", this.getbussinessBySIids.bind(this)); 
+    this.router.get("/services/:id/subServices/items", this.getbussinessBySd.bind(this)); 
+    
+    this.router.get("/bussinessprofilesByBSids", this.getbussinessByBSids.bind(this)); // old
     this.router.get("/adds", this.getAdds.bind(this));
     this.router.get("/addByid", this.getAddByid.bind(this));
     this.router.get("/locations", this.getLocations.bind(this));
@@ -222,6 +223,19 @@ export default class MobileAppServices {
     }
   }
 
+  async getbussinessBySd(req: Request, res: Response) {
+    const apiName = "App/BussinessProfileByServiceId";
+    const port = req.socket.localPort!;
+    const ServiceId = req.params.id || "";
+    const query = `SELECT BUSINESS_ID id, BUSINESS_NAME name, BUSINESS_TYPE type, ADDRESS address, IMAGE_URL1 imageUrl, WEEKDAY_TIMINGS timings, DEFAULT_CONTACT mobile FROM BUSSINESS_PROFILE WHERE STATUS='A'  AND SERVICE_ID=? `;
+
+    try {
+      const rows = await executeDbQuery(query, [ServiceId], false, apiName, port);
+      res.json({ status: 0, data: rows });
+    } catch (err: any) {
+      res.json({ status: 1, data: err.toString() });
+    }
+  }
   async getbussinessProfilesByid(req: Request, res: Response) {
     const apiName = "App/BussinessProfileById";
     const port = req.socket.localPort!;
