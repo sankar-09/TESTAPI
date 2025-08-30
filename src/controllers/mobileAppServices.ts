@@ -25,11 +25,12 @@ export default class MobileAppServices {
     this.router.get("/bussinessprofiles", this.getbussinessProfiles.bind(this));
     this.router.get("/bussinessprofilesBySearch", this.getbussinessProfilesBySearch.bind(this));
     this.router.get("/items/:id", this.getbussinessProfilesByid.bind(this));
-    
+
     this.router.get("/bussinessprofilesByid", this.getbussinessProfilesByid.bind(this)); // old 
-    this.router.get("/services/:id/items", this.getbussinessBySIids.bind(this)); 
-    this.router.get("/services/:id/subServices/items", this.getbussinessBySd.bind(this)); 
-    
+    this.router.get("/services/:id/items", this.getbussinessBySIids.bind(this));
+    this.router.get("/services/:id/subServices/items", this.getbussinessBySid.bind(this));
+    this.router.get("/services/:servId/subServices/:subServId/items", this.getbussinessByServSubId.bind(this));
+
     this.router.get("/bussinessprofilesByBSids", this.getbussinessByBSids.bind(this)); // old
     this.router.get("/adds", this.getAdds.bind(this));
     this.router.get("/addByid", this.getAddByid.bind(this));
@@ -223,7 +224,7 @@ export default class MobileAppServices {
     }
   }
 
-  async getbussinessBySd(req: Request, res: Response) {
+  async getbussinessBySid(req: Request, res: Response) {
     const apiName = "App/BussinessProfileByServiceId";
     const port = req.socket.localPort!;
     const ServiceId = req.params.id || "";
@@ -236,6 +237,31 @@ export default class MobileAppServices {
       res.json({ status: 1, data: err.toString() });
     }
   }
+
+  async getbussinessByServSubId(req: Request, res: Response) {
+    const apiName = "App/BussinessProfileByServiceSubSevId";
+    const port = req.socket.localPort!;
+    const ServiceId = req.params.servId || "";
+    const SubServiceID: any = req.params.subServId || "";
+    let params = [];
+    let query = `SELECT BUSINESS_ID id, BUSINESS_NAME name, BUSINESS_TYPE type, ADDRESS address, IMAGE_URL1 imageUrl, WEEKDAY_TIMINGS timings, DEFAULT_CONTACT mobile FROM BUSSINESS_PROFILE WHERE STATUS='A'  AND SERVICE_ID=? `;
+
+    if (SubServiceID.length > 1) {
+      query += `   AND SUB_SERVICE_ID=?`;
+      params = [ServiceId, SubServiceID];
+    } else {
+
+      params = [ServiceId];
+    }
+
+    try {
+      const rows = await executeDbQuery(query, params, false, apiName, port);
+      res.json({ status: 0, data: rows });
+    } catch (err: any) {
+      res.json({ status: 1, data: err.toString() });
+    }
+  }
+
   async getbussinessProfilesByid(req: Request, res: Response) {
     const apiName = "App/BussinessProfileById";
     const port = req.socket.localPort!;
