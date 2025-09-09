@@ -201,7 +201,7 @@ export default class MobileAppServices {
     const apiName = "App/getJobsByid";
     const port = req.socket.localPort!;
     const JobId = req.query.id || "";
-    const query = `SELECT JOB_ID id, JOB_TITLE , PACKAGE package, EXPERIENCE experience, JOB_TYPE jobType, DESCRIPTION description, IMAGE_URL imageUrl FROM JOBS WHERE STATUS='A' AND JOB_ID=?`;
+    const query = `SELECT JOB_ID id, JOB_TITLE title, PACKAGE package, EXPERIENCE experience, JOB_TYPE jobType, DESCRIPTION description, IMAGE_URL imageUrl FROM JOBS WHERE STATUS='A' AND JOB_ID=?`;
 
     try {
       const rows = await executeDbQuery(query, [JobId], false, apiName, port);
