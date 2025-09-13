@@ -111,7 +111,7 @@ class UserController {
  const refreshToken = jwt.sign(
           { userId: user.USER_ID, role: user.ROLE_NAME },
           secretKeyRefresh,
-          { algorithm: "HS256", expiresIn: "7d" }
+          { algorithm: "HS256", expiresIn: "7d" } 
         );
         Response.json({
           status: 0,
