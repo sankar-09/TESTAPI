@@ -22,6 +22,7 @@ export default class MobileAppServices {
     this.router.get("/subservice", this.getSubServices.bind(this)); // old 
     this.router.get("/jobs", this.getJobs.bind(this));
     this.router.get("/jobsByid", this.getJobsByid.bind(this));
+    this.router.get("/jobs/:id", this.getJobsByid.bind(this));
     this.router.get("/bussinessprofiles", this.getbussinessProfiles.bind(this));
     this.router.get("/bussinessprofilesBySearch", this.getbussinessProfilesBySearch.bind(this));
     this.router.get("/items/:id", this.getbussinessProfilesByid.bind(this));
@@ -200,7 +201,7 @@ export default class MobileAppServices {
   async getJobsByid(req: Request, res: Response) {
     const apiName = "App/getJobsByid";
     const port = req.socket.localPort!;
-    const JobId = req.query.id || "";
+    const JobId =req.params.id || req.query.id || "";
     const query = `SELECT JOB_ID id, JOB_TITLE title, PACKAGE package, EXPERIENCE experience, JOB_TYPE jobType, DESCRIPTION description, IMAGE_URL imageUrl FROM JOBS WHERE STATUS='A' AND JOB_ID=?`;
 
     try {
