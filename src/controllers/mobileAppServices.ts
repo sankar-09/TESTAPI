@@ -20,8 +20,8 @@ export default class MobileAppServices {
     this.router.get("/services/:id/subservices", this.getSubServices.bind(this));
 
     this.router.get("/subservice", this.getSubServices.bind(this)); // old 
-    this.router.get("/jobsO", this.getJobs.bind(this));
-    this.router.get("/jobs", this.getJobsN.bind(this)); //New
+    this.router.get("/jobs", this.getJobs.bind(this));
+    this.router.get("/newjobs", this.getJobsN.bind(this)); //New
     this.router.get("/jobsByid", this.getJobsByid.bind(this));
     this.router.get("/jobs/:id", this.getJobsByid.bind(this));
     this.router.get("/bussinessprofiles", this.getbussinessProfiles.bind(this));
@@ -206,7 +206,7 @@ export default class MobileAppServices {
 
     try {
       const rows = await executeDbQuery(query, [], false, apiName, port);
-      res.json({ status: 0, quickRequirements: rows });
+      res.json({ status: 0, newHiring: rows });
     } catch (err: any) {
       res.json({ status: 1, data: err.toString() });
     }
