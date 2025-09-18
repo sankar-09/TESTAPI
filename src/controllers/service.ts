@@ -180,8 +180,11 @@ export default class ServiceController {
             return;
         }
 
-      const rows = await executeDbQuery( "SELECT MAX(CAST(ID AS UNSIGNED)) AS maxId FROM SERVICES", [], false, apiName, port, connection );
-      const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(3, '0');
+      // const rows = await executeDbQuery( "SELECT MAX(CAST(ID AS UNSIGNED)) AS maxId FROM SERVICES", [], false, apiName, port, connection );
+      // const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(3, '0');
+      const rows = await executeDbQuery( "CALL Locate_GenerateServiceId('SER', @newId); SELECT @newId AS newServiceId;", [], false, apiName, port, connection );
+
+      const newId = rows[1]?.[0]?.newServiceId;
       // console.log('maxid :',rows[0]?.maxId );
       const image_url = await uploadImage(input.IMAGE_URL);
       
@@ -289,8 +292,10 @@ if (cached) {
         return;
       }
 
-      const rows = await executeDbQuery("SELECT MAX(CAST(SUB_SERVICE_ID AS UNSIGNED)) AS maxId FROM SUB_SERVICES", [], false, apiName, port, connection);
-      const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(4, '0');
+      // const rows = await executeDbQuery("SELECT MAX(CAST(SUB_SERVICE_ID AS UNSIGNED)) AS maxId FROM SUB_SERVICES", [], false, apiName, port, connection);
+      // const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(4, '0');
+      const subRows = await executeDbQuery("CALL Locate_GenerateSubServiceId('SUB')", [], false, apiName, port, connection);
+      const newId = subRows[0][0].newSubServiceId;
 
       const imageUrl = await uploadImage(input.IMAGE_URL);
 
