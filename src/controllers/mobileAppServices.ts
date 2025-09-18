@@ -21,7 +21,7 @@ export default class MobileAppServices {
 
     this.router.get("/subservice", this.getSubServices.bind(this)); // old 
     this.router.get("/jobs", this.getJobs.bind(this));
-    this.router.get("/newjobs", this.getJobsN.bind(this)); //New
+    this.router.get("/jobhirings", this.getJobsN.bind(this)); //New
     this.router.get("/jobsByid", this.getJobsByid.bind(this));
     this.router.get("/jobs/:id", this.getJobsByid.bind(this));
     this.router.get("/bussinessprofiles", this.getbussinessProfiles.bind(this));
@@ -203,10 +203,14 @@ export default class MobileAppServices {
     const apiName = "App/JobsNew";
     const port = req.socket.localPort!;
     const query = `SELECT JOB_ID AS id, JOB_TITLE AS title, JOB_TYPE AS type, IMAGE_URL AS imageUrl, 'Just Now' postedAt, 'true' isSaved FROM JOBS WHERE HIRING_TYPE='N' ORDER BY CREATED_ON DESC`;
+    
+    const query1 = `SELECT JOB_ID AS id, JOB_TITLE AS title, JOB_TYPE AS type, IMAGE_URL AS imageUrl, 'Just Now' postedAt, 'true' isSaved FROM JOBS WHERE HIRING_TYPE='Q' ORDER BY CREATED_ON DESC`;
 
     try {
       const rows = await executeDbQuery(query, [], false, apiName, port);
-      res.json({ status: 0, newHiring: rows });
+      const rows1 = await executeDbQuery(query1, [], false, apiName, port);
+
+      res.json({ status: 0, quickRequirements:rows1, newHiring: rows });
     } catch (err: any) {
       res.json({ status: 1, data: err.toString() });
     }
