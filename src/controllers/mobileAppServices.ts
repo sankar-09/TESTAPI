@@ -191,7 +191,7 @@ export default class MobileAppServices {
     const apiName = "App/ExploreServices";
     const port = req.socket.localPort!;
     const ServiceId = req.params.id || "";
-    const query = `SELECT ID as id, NAME as serviceName, IMAGE_URL as imageUrl FROM SERVICES ORDER BY CREATED_ON DESC LIMIT 8`;
+    const query = `SELECT ID as id, NAME as serviceName, IMAGE_URL as imageUrl FROM SERVICES WHERE isExplored='true' ORDER BY CREATED_ON DESC LIMIT 8`;
     const query1 = `SELECT ID as id, NAME as serviceName, IMAGE_URL as imageUrl FROM SERVICES ORDER BY NAME ASC LIMIT 12`;
 
     try {
