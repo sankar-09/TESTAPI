@@ -219,9 +219,9 @@ export default class MobileAppServices {
   async getJobsN(req: Request, res: Response) {
     const apiName = "App/JobsNew";
     const port = req.socket.localPort!;
-    const query = `SELECT JOB_ID AS id, JOB_TITLE AS title, JOB_TYPE AS type, IMAGE_URL AS imageUrl, 'Just Now' postedAt, 'true' isSaved FROM JOBS WHERE HIRING_TYPE='N' ORDER BY CREATED_ON DESC`;
+    const query = `SELECT JOB_ID AS id, JOB_TITLE AS title, JOB_TYPE AS type, IMAGE_URL AS imageUrl, 'Just Now' postedAt, 'true' isSaved FROM JOBS ORDER BY CREATED_ON DESC`;
     
-    const query1 = `SELECT JOB_ID AS id, JOB_TITLE AS title, JOB_TYPE AS type, IMAGE_URL AS imageUrl, 'Just Now' postedAt, 'true' isSaved FROM JOBS WHERE HIRING_TYPE='Q' ORDER BY CREATED_ON DESC`;
+    const query1 = `SELECT JOB_ID AS id, JOB_TITLE AS title, JOB_TYPE AS type, IMAGE_URL AS imageUrl, 'Just Now' postedAt, 'true' isSaved FROM JOBS WHERE isQuickRequirement='true' ORDER BY CREATED_ON DESC`;
 
     try {
       const rows = await executeDbQuery(query, [], false, apiName, port);
