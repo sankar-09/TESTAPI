@@ -18,6 +18,7 @@ export default class MobileAppServices {
     this.router.get("/cielednewsfeeds", this.getcieledFeed.bind(this));
     this.router.get("/service", this.getServices.bind(this));
     this.router.get("/services/:id/subservices", this.getSubServices.bind(this));
+    this.router.get("/exploreServices", this.getExploreServices.bind(this));
 
     this.router.get("/subservice", this.getSubServices.bind(this)); // old 
     this.router.get("/jobs", this.getJobs.bind(this));
@@ -181,6 +182,22 @@ export default class MobileAppServices {
     try {
       const rows = await executeDbQuery(query, [ServiceId], false, apiName, port);
       res.json({ status: 0, data: rows });
+    } catch (err: any) {
+      res.json({ status: 1, data: err.toString() });
+    }
+  }
+
+  async getExploreServices(req: Request, res: Response) {
+    const apiName = "App/ExploreServices";
+    const port = req.socket.localPort!;
+    const ServiceId = req.params.id || "";
+    const query = `SELECT ID as id, NAME as serviceName, IMAGE_URL as imageUrl FROM SERVICES ORDER BY CREATED_ON DESC LIMIT 8`;
+    const query1 = `SELECT ID as id, NAME as serviceName, IMAGE_URL as imageUrl FROM SERVICES ORDER BY NAME ASC LIMIT 12`;
+
+    try {
+      const rows = await executeDbQuery(query, [], false, apiName, port);
+      const rows1 = await executeDbQuery(query1, [], false, apiName, port);
+      res.json({ status: 0, exploreServices: rows, services: rows1 });
     } catch (err: any) {
       res.json({ status: 1, data: err.toString() });
     }

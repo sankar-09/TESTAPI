@@ -165,23 +165,23 @@ class UserController {
     await connection.beginTransaction();
     
       const chekdup = ` SELECT COUNT(EMAIL) as count FROM USERS WHERE EMAIL=? AND MOBILE_NUMBER=?`;
-          const dupResult = await executeDbQuery(chekdup, [input.EMAIL, input.MOBILE_NUMBER], false, apiName, port, connection);
+          const dupResult = await executeDbQuery(chekdup, [input.EMAIL, input.MOBILE_NUMBER], true, apiName, port, connection);
           if (Number(dupResult[0]?.count) > 0) {
               await connection.rollback();
               res.json({ status: 2, result: "User already exists." });
               return;
           }
         
-    await executeDbQuery("CALL GenerateUserId(@id)", [], false, apiName, port, connection);
+    await executeDbQuery("CALL GenerateUserId(@id)", [], true, apiName, port, connection);
     
-    const idRows = await executeDbQuery("SELECT @id as newUserId", [], false, apiName, port, connection);
+    const idRows = await executeDbQuery("SELECT @id as newUserId", [], true, apiName, port, connection);
     const newUserId = idRows[0]?.newUserId;
     const image_url = await uploadImage(input.IMAGE_URL);
     const insertQuery = ` INSERT INTO USERS ( CITY_ID, USER_ID, NAME, SURNAME, FATHER_NAME, GENDER, DOB, MOBILE_NUMBER, ALTERNATE_NUMBER, EMAIL, ROLE, ADDRESS, STATUS, IMAGE_URL, CREATED_BY ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
       
     const params = [ input.CITY_ID, newUserId, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.EMAIL, input.ROLE, input.ADDRESS, input.STATUS, image_url, userId ];
       
-    const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+    const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
     await connection.commit();
   //send mail to user
    try {

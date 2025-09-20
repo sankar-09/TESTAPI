@@ -182,9 +182,10 @@ export default class ServiceController {
 
       // const rows = await executeDbQuery( "SELECT MAX(CAST(ID AS UNSIGNED)) AS maxId FROM SERVICES", [], false, apiName, port, connection );
       // const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(3, '0');
-      const rows = await executeDbQuery( "CALL Locate_GenerateServiceId('SER', @newId); SELECT @newId AS newServiceId;", [], false, apiName, port, connection );
+      const rows = await executeDbQuery( "CALL Locate_GenerateServiceId('SER');", [], false, apiName, port, connection );
 
-      const newId = rows[1]?.[0]?.newServiceId;
+      const newId = rows[0][0].newServiceId;
+
       // console.log('maxid :',rows[0]?.maxId );
       const image_url = await uploadImage(input.IMAGE_URL);
       
