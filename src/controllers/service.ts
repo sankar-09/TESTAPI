@@ -54,7 +54,7 @@ export default class ServiceController {
               let subserviceID = '';
   
               const checkServiceDupQuery = ` SELECT ID FROM SERVICES WHERE NAME=? `;
-              const serviceDupResult = await executeDbQuery(checkServiceDupQuery, [servicename], false, apiName, port, connection);
+              const serviceDupResult = await executeDbQuery(checkServiceDupQuery, [servicename], true, apiName, port, connection);
   
               if (serviceDupResult && serviceDupResult.length > 0 && Number(serviceDupResult[0]?.ID) > 0) {
                   // Service exists, use its ID
@@ -75,13 +75,13 @@ export default class ServiceController {
                   serviceID = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(3, '0');
                   const insertServiceQuery = ` INSERT INTO SERVICES (ID, NAME, STATUS) VALUES (?, ?, ?) `;
                   const serviceParams = [serviceID, servicename, 'A'];
-                  await executeDbQuery(insertServiceQuery, serviceParams, false, apiName, port, connection);
+                  await executeDbQuery(insertServiceQuery, serviceParams, true, apiName, port, connection);
               }
   
               // 2. Now, regardless of whether the service was new or existing,
               //    check and create the sub-service for the current serviceID.
               const checkSubServiceDupQuery = ` SELECT SUB_SERVICE_ID AS ID FROM SUB_SERVICES WHERE NAME = ? AND SERVICE_ID = ? `;
-              const subServiceDupResult = await executeDbQuery(checkSubServiceDupQuery, [subservicename, serviceID], false, apiName, port, connection);
+              const subServiceDupResult = await executeDbQuery(checkSubServiceDupQuery, [subservicename, serviceID], true, apiName, port, connection);
   
               if (subServiceDupResult && subServiceDupResult.length > 0 && Number(subServiceDupResult[0]?.ID) > 0) {
                   // Sub-service exists, no action needed (or you could add update logic here if desired)
@@ -165,15 +165,15 @@ export default class ServiceController {
     const port = req.socket.localPort!;
     let input = req.body;
     const userId = req.headers["userid"] || "";
-
+    
     let connection;
 
     try {
       connection = await pool.getConnection();
       await connection.beginTransaction();
-
+      await redis.del("all_services");
       const chekdup = ` SELECT COUNT(NAME) as count FROM SERVICES WHERE NAME=? AND DESCRIPTION=?`;
-        const dupResult = await executeDbQuery(chekdup, [input.NAME, input.DESCRIPTION], false, apiName, port, connection);
+        const dupResult = await executeDbQuery(chekdup, [input.NAME, input.DESCRIPTION], true, apiName, port, connection);
         if (Number(dupResult[0]?.count) > 0) {
             await connection.rollback();
             res.json({ status: 2, result: "Service already exists." });
@@ -182,7 +182,7 @@ export default class ServiceController {
 
       // const rows = await executeDbQuery( "SELECT MAX(CAST(ID AS UNSIGNED)) AS maxId FROM SERVICES", [], false, apiName, port, connection );
       // const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(3, '0');
-      const rows = await executeDbQuery( "CALL Locate_GenerateServiceId('SER');", [], false, apiName, port, connection );
+      const rows = await executeDbQuery( "CALL Locate_GenerateServiceId('SER');", [], true, apiName, port, connection );
 
       const newId = rows[0][0].newServiceId;
 
@@ -192,7 +192,7 @@ export default class ServiceController {
       const insertQuery = ` INSERT INTO SERVICES ( ID, NAME, DESCRIPTION, IMAGE_URL, STATUS, CREATED_BY) VALUES ( ?, ?, ?, ?, ?, ?) `;
       const params = [ newId, input.NAME, input.DESCRIPTION, image_url, input.STATUS, userId];
 
-      const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
       const results={message: "Service created", serviceId: newId, affectedRows: result.affectedRows}
       res.json({ status: 0, result:results });
@@ -285,8 +285,8 @@ if (cached) {
     try {
       connection = await pool.getConnection();
       await connection.beginTransaction();
-
-      const checkDup = await executeDbQuery("SELECT COUNT(NAME) as count FROM SUB_SERVICES WHERE NAME = ? AND SERVICE_ID = ?", [input.NAME, input.ServiceID], false, apiName, port, connection);
+      await redis.del("all_subservices");
+      const checkDup = await executeDbQuery("SELECT COUNT(NAME) as count FROM SUB_SERVICES WHERE NAME = ? AND SERVICE_ID = ?", [input.NAME, input.ServiceID], true, apiName, port, connection);
       if (Number(checkDup[0]?.count) > 0) {
         await connection.rollback();
         res.json({ status: 2, result: "Sub Service already exists." });
@@ -295,7 +295,7 @@ if (cached) {
 
       // const rows = await executeDbQuery("SELECT MAX(CAST(SUB_SERVICE_ID AS UNSIGNED)) AS maxId FROM SUB_SERVICES", [], false, apiName, port, connection);
       // const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(4, '0');
-      const subRows = await executeDbQuery("CALL Locate_GenerateSubServiceId('SUB')", [], false, apiName, port, connection);
+      const subRows = await executeDbQuery("CALL Locate_GenerateSubServiceId('SUB')", [], true, apiName, port, connection);
       const newId = subRows[0][0].newSubServiceId;
 
       const imageUrl = await uploadImage(input.IMAGE_URL);
@@ -303,7 +303,7 @@ if (cached) {
       const insertQuery = "INSERT INTO SUB_SERVICES (CITY_ID, SERVICE_ID, SUB_SERVICE_ID, NAME, DESCRIPTION, STATUS, IMAGE_URL, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?)";
       const params = [input.CITY_ID, input.ServiceID, newId, input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, userId];
 
-      const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
 
       res.json({ status: 0, result: { message: "Sub-service created", subServiceId: newId, affectedRows: result.affectedRows } });
@@ -368,6 +368,7 @@ if (cached) {
     try {
       connection = await pool.getConnection();
       await connection.beginTransaction();
+      await redis.del("all_subservices");
       const imageUrl = await uploadImage(input.IMAGE_URL);
 
       const query = "UPDATE SUB_SERVICES SET CITY_ID = ?, SERVICE_ID = ?, NAME = ?, DESCRIPTION = ?, STATUS = ?, IMAGE_URL = ?, EDITED_BY = ? WHERE SUB_SERVICE_ID = ?";
@@ -397,18 +398,20 @@ async createBusinessProfile(req: Request, res: Response) {
 
   try {
     connection = await pool.getConnection();
+    await redis.del("all_bussiness");
     await connection.beginTransaction();
 
     const checkDup = "SELECT COUNT(BUSINESS_NAME) as count FROM BUSSINESS_PROFILE WHERE BUSINESS_NAME = ? AND MOBILE = ?";
-    const dupResult = await executeDbQuery(checkDup, [input.BUSINESS_NAME, input.MOBILE], false, apiName, port, connection);
+    const dupResult = await executeDbQuery(checkDup, [input.BUSINESS_NAME, input.MOBILE], true, apiName, port, connection);
     if (Number(dupResult[0]?.count) > 0) {
       await connection.rollback();
       res.json({ status: 2, result: "Business Profile already exists." });
       return;
     }
 
-    const rows = await executeDbQuery("SELECT MAX(CAST(BUSINESS_ID AS UNSIGNED)) AS maxId FROM BUSSINESS_PROFILE", [], false, apiName, port, connection);
-    const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(4, '0');
+    const rows = await executeDbQuery("CALL Locate_GenerateBusinessId('B');", [], true, apiName, port, connection);
+
+    const newId = rows[0][0].newBusinessId;
 
     const image_url1 = await uploadImage(input.IMAGE_URL1);
     const image_url2 = await uploadImage(input.IMAGE_URL2);
@@ -420,7 +423,7 @@ async createBusinessProfile(req: Request, res: Response) {
 
     const params = [input.CITY_ID, input.ServiceID, input.SubServiceID, newId, input.BUSINESS_NAME, input.OWNER_NAME, input.BUSINESS_TYPE, input.MOBILE, input.ADDRESS, input.WEEKDAY_TIMINGS, input.SUNDAY_TIMINGS, input.WEBSITE_URL, input.EMAIL, input.DESCRIPTION, input.LATITUDE, input.LONGITUDE, input.DEFAULT_CONTACT, image_url1, image_url2, image_url3, image_url4, image_url5, input.STATUS, input.IS_LOCATED || 'N', userId];
 
-    const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+    const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
     await connection.commit();
 
     res.json({ status: 0, result: { message: "Business Profile created", subServiceId: newId, affectedRows: result.affectedRows } });

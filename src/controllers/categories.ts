@@ -45,7 +45,7 @@ export default class CategoryController {
       }
 
       const idQuery = `SELECT MAX(CAST(CAT_ID AS UNSIGNED)) AS maxId FROM CATEGORIES`;
-      const rows = await executeDbQuery(idQuery, [], false, apiName, port, connection);
+      const rows = await executeDbQuery(idQuery, [], true, apiName, port, connection);
       const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(3, '0');
       const imageUrl = await uploadImage(input.IMAGE_URL);
 
@@ -131,14 +131,14 @@ export default class CategoryController {
       }
 
       const idQuery = `SELECT MAX(CAST(SUBCAT_ID AS UNSIGNED)) AS maxId FROM SUBCATEGORIES`;
-      const rows = await executeDbQuery(idQuery, [], false, apiName, port, connection);
+      const rows = await executeDbQuery(idQuery, [], true, apiName, port, connection);
       const newId = (Number(rows[0]?.maxId || 0) + 1).toString().padStart(4, '0');
       const imageUrl = await uploadImage(input.IMAGE_URL);
 
       const insertQuery = `INSERT INTO SUBCATEGORIES (CITY_ID, CAT_ID, SUBCAT_ID, NAME, DESCRIPTION, STATUS, IMAGE_URL, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
       const params = [input.CITY_ID, input.CAT_ID, newId, input.NAME, input.DESCRIPTION, input.STATUS, imageUrl, userId];
 
-      const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
 
       res.json({ status: 0, result: { message: "Sub-category created", subCategoryId: newId, affectedRows: result.affectedRows } });

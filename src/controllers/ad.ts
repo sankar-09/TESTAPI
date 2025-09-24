@@ -34,7 +34,7 @@ export default class AdsController {
     //     return;
     //   }
 
-      const imageUrl = await uploadImage(input.imageUrl);
+      const imageUrl = await uploadImage(input.IMAGE_URL);
 
       const insertQuery = `
         INSERT INTO ADVERTISEMENTS (IMAGE_URL, DESCRIPTION, FROM_DATE, TO_DATE, STATUS, CREATED_BY)
@@ -42,7 +42,7 @@ export default class AdsController {
       `;
       const params = [imageUrl, input.DESCRIPTION, input.FROM_DATE, input.TO_DATE, input.STATUS, userId];
 
-      const insertResult = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const insertResult = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
 
       res.json({

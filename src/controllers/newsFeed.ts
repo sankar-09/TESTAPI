@@ -12,6 +12,7 @@ export default class NewsFeedController {
     this.router.get("/newsfeeds", this.getAllNewsFeeds.bind(this));
     this.router.get("/newsfeedbyid", this.getNewsFeedById.bind(this));
     this.router.put("/newsfeeds", this.updateNewsFeed.bind(this));
+    this.router.put("/acceptFeed", this.acceptFeed.bind(this));
     this.router.post("/newsfeeds", this.createNewsFeed.bind(this));
   }
 
@@ -28,7 +29,7 @@ export default class NewsFeedController {
 
     // Duplicate check: count rows where FEED_HEAD and FEED_MATTER match.
     const chekdup = `SELECT COUNT(FEED_HEAD) as count FROM NEWS_FEED WHERE FEED_HEAD=? AND FEED_MATTER=?`;
-    const dupResult = await executeDbQuery(chekdup, [input.FEED_HEAD, input.FEED_MATTER], false, apiName, port, connection);
+    const dupResult = await executeDbQuery(chekdup, [input.FEED_HEAD, input.FEED_MATTER], true, apiName, port, connection);
     if (Number(dupResult[0]?.count) > 0) {
       await connection.rollback();
       res.json({ status: 2, result: "News feed already exists." });
@@ -36,7 +37,7 @@ export default class NewsFeedController {
     }
 
     // Generate new FEED_ID.
-    const result = await executeDbQuery("SELECT MAX(CAST(SUBSTRING(FEED_ID, 5) AS UNSIGNED)) AS maxId FROM NEWS_FEED", [], false, apiName, port, connection);
+    const result = await executeDbQuery("SELECT MAX(CAST(SUBSTRING(FEED_ID, 5) AS UNSIGNED)) AS maxId FROM NEWS_FEED", [], true, apiName, port, connection);
     const newId = "FEED" + String((Number(result[0]?.maxId || 0) + 1)).padStart(3, "0");
 
     // Upload image.
@@ -45,7 +46,7 @@ export default class NewsFeedController {
     // Insert new news feed.
     const insertQuery = `INSERT INTO NEWS_FEED (CITY_ID, FEED_ID, FEED_HEAD, FEED_MATTER, IMAGE_URL, FEED_DATE, STATUS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
     const params = [ '001', newId, input.FEED_HEAD, input.FEED_MATTER, image_url, input.FEED_DATE, 'P', userId ];
-    const insertResult = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+    const insertResult = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
     await connection.commit();
 
     const results = { message: "News feed created", feedId: newId, affectedRows: insertResult.affectedRows };
@@ -110,4 +111,28 @@ export default class NewsFeedController {
       res.json({ status: 1, result: err.toString() });
     }
   }
+
+    async acceptFeed(req: Request, res: Response) {
+    const apiName = "newsfeed/accept";
+    const port = req.socket.localPort!;
+    const userId = req.headers["userid"] || "";
+    
+    const input = req.body;
+     let connection: any;
+   
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const updateQuery = `UPDATE NEWS_FEED SET STATUS='A', ACCEPTED_BY=? WHERE FEED_ID=?`;
+    const params = [userId, input.feedId];
+
+    try {
+      const result = await executeDbQuery(updateQuery, params, true, apiName, port);
+      const results = {message: "News feed accepted"};
+      res.json({ status: 0, result:results });
+    } catch (err: any) {
+      res.json({ status: 1, result: err.toString() });
+    }
+  }
 }
+

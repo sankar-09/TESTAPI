@@ -26,14 +26,14 @@ export default class NearLocationController {
       await connection.beginTransaction();
 
       const checkDup = `SELECT COUNT(LOCAT_NAME) AS count FROM NEAR_LOCATION WHERE LOCAT_NAME = ? AND OVERVIEW = ?`;
-      const dupResult = await executeDbQuery(checkDup, [input.LOCAT_NAME, input.OVERVIEW], false, apiName, port, connection);
+      const dupResult = await executeDbQuery(checkDup, [input.LOCAT_NAME, input.OVERVIEW], true, apiName, port, connection);
       if (Number(dupResult[0]?.count) > 0) {
         await connection.rollback();
         res.json({ status: 2, result: "Location already exists." });
         return;
       }
 
-      const result = await executeDbQuery("SELECT MAX(CAST(SUBSTRING(LOCAT_ID, 6) AS UNSIGNED)) AS maxId FROM NEAR_LOCATION", [], false, apiName, port, connection);
+      const result = await executeDbQuery("SELECT MAX(CAST(SUBSTRING(LOCAT_ID, 6) AS UNSIGNED)) AS maxId FROM NEAR_LOCATION", [], true, apiName, port, connection);
       const newId = "LOCAT" + String((Number(result[0]?.maxId || 0) + 1)).padStart(3, "0");
 
       // Upload all images
@@ -46,7 +46,7 @@ export default class NearLocationController {
       const insertQuery = `INSERT INTO NEAR_LOCATION (CITY_ID, LOCAT_ID, LOCAT_NAME, OVERVIEW, BEST_TIME, ATTRACTIONS, ACCESSIBILITY, IMAGE_URL1, IMAGE_URL2, IMAGE_URL3, IMAGE_URL4, IMAGE_URL5, IMAGE_URL6, IMAGE_URL7, IMAGE_URL8, IMAGE_URL9, IMAGE_URL10, STATUS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
       const params = [ input.CITY_ID || "001", newId, input.LOCAT_NAME, input.OVERVIEW, input.BEST_TIME, input.ATTRACTIONS, input.ACCESSIBILITY, images[0], images[1], images[2], images[3], images[4], images[5], images[6], images[7], images[8], images[9], "A", userId ];
 
-      const insertResult = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const insertResult = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
 
       const results = { message: "Location created", locationId: newId, affectedRows: insertResult.affectedRows };

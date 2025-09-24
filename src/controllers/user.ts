@@ -1,5 +1,5 @@
-import express, { Request, Response } from "express";
-import { pool, executeDbQuery } from "../db";
+import express, { Request, Response, NextFunction } from "express";
+import { pool, executeDbQuery, logger } from "../db";
 import { request } from "http";
 import { uploadImage } from "../utils/cloudinaryUtil";
 import  jwt  from "jsonwebtoken";
@@ -136,7 +136,7 @@ class UserController {
       await connection.beginTransaction();
 
       const chekdup = `SELECT COUNT(EMAIL) as count FROM USERS WHERE EMAIL = ? AND PASSWORD = ? AND USER_ID = ?`;
-          const dupResult = await executeDbQuery(chekdup, [input.EMAIL, input.OLD_PASSWORD, userId], false, apiName, port, connection);
+          const dupResult = await executeDbQuery(chekdup, [input.EMAIL, input.OLD_PASSWORD, userId], true, apiName, port, connection);
           if (Number(dupResult[0]?.count) == 0) {
               await connection.rollback();
               res.json({ status: 2, result: "Invalid Credentials." });
@@ -154,62 +154,56 @@ class UserController {
     }
   }
 
-  async createUser(req: Request, res: Response) {
-  const apiName = "user/create";
-  const port: number = req.socket.localPort!;
-  const userId = req.headers["userid"] || "";
-  let connection;
-  let input = req.body;
-  try {
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
-    
-      const chekdup = ` SELECT COUNT(EMAIL) as count FROM USERS WHERE EMAIL=? AND MOBILE_NUMBER=?`;
-          const dupResult = await executeDbQuery(chekdup, [input.EMAIL, input.MOBILE_NUMBER], true, apiName, port, connection);
-          if (Number(dupResult[0]?.count) > 0) {
-              await connection.rollback();
-              res.json({ status: 2, result: "User already exists." });
-              return;
-          }
-        
-    await executeDbQuery("CALL GenerateUserId(@id)", [], true, apiName, port, connection);
-    
-    const idRows = await executeDbQuery("SELECT @id as newUserId", [], true, apiName, port, connection);
-    const newUserId = idRows[0]?.newUserId;
-    const image_url = await uploadImage(input.IMAGE_URL);
-    const insertQuery = ` INSERT INTO USERS ( CITY_ID, USER_ID, NAME, SURNAME, FATHER_NAME, GENDER, DOB, MOBILE_NUMBER, ALTERNATE_NUMBER, EMAIL, ROLE, ADDRESS, STATUS, IMAGE_URL, CREATED_BY ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
-      
-    const params = [ input.CITY_ID, newUserId, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.EMAIL, input.ROLE, input.ADDRESS, input.STATUS, image_url, userId ];
-      
-    const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
-    await connection.commit();
-  //send mail to user
-   try {
-        await sendEmail(
-          input.EMAIL,
-          "Welcome to Our Locate App Services",
-          "welcome",
-          {
-            name: input.NAME,
-            email: input.EMAIL,
-          }
-        );
-        
-        // res.json("email sent successfullys");
-      } catch (emailError) {
-        console.error("Failed to send welcome email:", emailError);
-        res.json("email not sent");
+  async createUser(req: Request, res: Response, next: NextFunction) {
+    const apiName = "user/create";
+    const port: number = req.socket.localPort!;
+    const userId = req.headers["userid"] || "";
+    let connection;
+    let input = req.body;
+
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const checkDup = `SELECT COUNT(EMAIL) as count FROM USERS WHERE EMAIL=? AND MOBILE_NUMBER=?`;
+      const dupResult = await executeDbQuery(checkDup, [input.EMAIL, input.MOBILE_NUMBER], true, apiName, port, connection);
+      if (Number(dupResult[0]?.count) > 0) {
+        await connection.rollback();
+        res.json({ status: 2, result: "User already exists." });
+        return;
       }
 
-    const results = {message: "User created", userId: newUserId, affectedRows: result.affectedRows}
-    res.json({ status: 0, result:results });  
-  } catch (err: any) {
-    if (connection) await connection.rollback();
-    res.json({ status: 1, result: err.toString() });
-  } finally {
-    if (connection) connection.release();
+      await executeDbQuery("CALL GenerateUserId(@id)", [], true, apiName, port, connection);
+      const idRows = await executeDbQuery("SELECT @id as newUserId", [], true, apiName, port, connection);
+      const newUserId = idRows[0]?.newUserId;
+
+      const image_url = await uploadImage(input.IMAGE_URL);
+      const insertQuery = ` INSERT INTO USERS (CITY_ID, USER_ID, NAME, SURNAME, FATHER_NAME, GENDER, DOB, MOBILE_NUMBER,
+      ALTERNATE_NUMBER, EMAIL, ROLE, ADDRESS, STATUS, IMAGE_URL, CREATED_BY ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`;
+
+      const params = [ input.CITY_ID, newUserId, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.EMAIL, input.ROLE, input.ADDRESS, input.STATUS, image_url, userId ];
+
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
+      await connection.commit();
+
+      let emailStatus = "not sent";
+      try {
+        await sendEmail(  input.EMAIL, "Welcome to Our Locate App Services", "welcome",  { name: input.NAME, email: input.EMAIL } );
+        emailStatus = "sent";
+      } catch (emailError) {
+        logger.error("Failed to send welcome email:", emailError);
+      }
+
+      res.json({ status: 0, result: { message: "User created", emailStatus, userId: newUserId, affectedRows: result.affectedRows } });
+
+    } catch (err: any) {
+      if (connection) await connection.rollback();
+      logger.error("Error in createUser route:", err);
+      res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
   }
-}
 
 
   async getAllUsers(req: Request, res: Response) {
@@ -339,7 +333,7 @@ class UserController {
       await connection.beginTransaction();
 
           const chekdup = ` SELECT COUNT(ROLE_NAME) as count FROM ROLES WHERE ROLE_NAME=? AND DESCRIPTION=?`;
-          const dupResult = await executeDbQuery(chekdup, [input.ROLE_NAME, input.DESCRIPTION], false, apiName, port, connection);
+          const dupResult = await executeDbQuery(chekdup, [input.ROLE_NAME, input.DESCRIPTION], true, apiName, port, connection);
           if (Number(dupResult[0]?.count) > 0) {
               await connection.rollback();
               res.json({ status: 2, result: "Role already exists." });
@@ -349,7 +343,7 @@ class UserController {
       const maxIdResult = await executeDbQuery(
         "SELECT IFNULL(MAX(ROLE_ID), 1110) AS maxId FROM ROLES",
         [],
-        false,
+        true,
         apiName,
         port,
         connection
@@ -367,7 +361,7 @@ class UserController {
       const result = await executeDbQuery(
         insertQuery,
         params,
-        false,
+        true,
         apiName,
         port,
         connection

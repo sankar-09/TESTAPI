@@ -55,7 +55,7 @@ class EmployeeController {
 
       // Check for duplicate employee (by EMAIL and MOBILE_NUMBER)
       const checkDup = `SELECT COUNT(*) as count FROM EMPLOYEES WHERE EMAIL = ? AND MOBILE_NUMBER = ?`;
-      const dupResult = await executeDbQuery(checkDup, [input.EMAIL, input.MOBILE_NUMBER], false, apiName, port, connection);
+      const dupResult = await executeDbQuery(checkDup, [input.EMAIL, input.MOBILE_NUMBER], true, apiName, port, connection);
       if (Number(dupResult[0]?.count) > 0) {
         await connection.rollback();
         res.json({ status: 2, result: "Employee already exists." });
@@ -63,8 +63,8 @@ class EmployeeController {
       }
 
       // Generate new employee ID
-      await executeDbQuery("CALL GenerateEmpId(@id)", [], false, apiName, port, connection);
-      const idRows = await executeDbQuery("SELECT @id as newEmpId", [], false, apiName, port, connection);
+      await executeDbQuery("CALL GenerateEmpId(@id)", [], true, apiName, port, connection);
+      const idRows = await executeDbQuery("SELECT @id as newEmpId", [], true, apiName, port, connection);
       const newEmpId = idRows[0]?.newEmpId;
 
       // Upload image if one is provided
@@ -73,7 +73,7 @@ class EmployeeController {
       // Insert employee record – note the column order follows the EMPLOYEES table definition.
       const insertQuery = `INSERT INTO EMPLOYEES (CITY_ID, ROLE, EMPLOYEE_ID, NAME, SURNAME, FATHER_NAME, GENDER, DOB, EMAIL, MOBILE_NUMBER, ALTERNATE_NUMBER, ADDRESS, STATUS, IMAGE_URL, PASSWORD, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`;
       const params = [input.CITY_ID, input.ROLE, newEmpId, input.NAME, input.SURNAME, input.FATHER_NAME, input.GENDER, input.DOB, input.EMAIL, input.MOBILE_NUMBER, input.ALTERNATE_NUMBER, input.ADDRESS, input.STATUS, image_url, input.PASSWORD, userId ];
-      const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
       res.json({ status: 0, result: { message: "Employee created", employeeId: newEmpId, affectedRows: result.affectedRows, },
       });
@@ -145,18 +145,18 @@ class EmployeeController {
       connection = await pool.getConnection(); await connection.beginTransaction();
 
        const chekdup = ` SELECT COUNT(*) as count FROM ROLES WHERE ROLE_NAME=? AND DESCRIPTION=?`;
-          const dupResult = await executeDbQuery(chekdup, [input.role_name, input.description], false, apiName, port, connection);
+          const dupResult = await executeDbQuery(chekdup, [input.role_name, input.description], true, apiName, port, connection);
           if (Number(dupResult[0]?.count) > 0) {
               await connection.rollback();
               res.json({ status: 2, result: "Role already exists." });
               return;
           }
 
-      const maxIdResult = await executeDbQuery("SELECT IFNULL(MAX(ROLE_ID), 1110) AS maxId FROM ROLES", [], false, apiName, port, connection);
+      const maxIdResult = await executeDbQuery("SELECT IFNULL(MAX(ROLE_ID), 1110) AS maxId FROM ROLES", [], true, apiName, port, connection);
       const newId = Number(maxIdResult[0]?.maxId || 1110) + 1;
       const insertQuery = `INSERT INTO ROLES (CITY_ID, ROLE_ID, ROLE_NAME, DESCRIPTION, STATUS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?)`;
       const params = [input.city_id, newId, input.role_name, input.description, input.status, userId];
-      const result = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
       const results = {message: "Role created", roleId: newId, affectedRows: result.affectedRows};
       res.json({ status: 0, results:result });

@@ -9,6 +9,7 @@ dotenv.config();
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST,
   port: Number(process.env.SMTP_PORT),
+  secure:false,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -19,7 +20,7 @@ const handlebarOptions = {
   viewEngine: create({
     extname: ".hbs",
     partialsDir: path.resolve("./src/template/"),
-    // defaultLayout: false,
+    defaultLayout: false,
   }),
   viewPath: path.resolve("./src/template/"),
   extName: ".hbs",
@@ -33,7 +34,7 @@ export const sendEmail = async (
   template: string,
   variables: any
 ) => {
-  transporter.sendMail({
+  await transporter.sendMail({
     from: process.env.SMTP_USER,
     to,
     subject,
