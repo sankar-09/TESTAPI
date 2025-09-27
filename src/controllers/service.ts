@@ -32,6 +32,12 @@ export default class ServiceController {
     this.router.put("/BussinessProfiles", this.updateBusinessProfile.bind(this));
     this.router.post("/BussinessProfiles", this.createBusinessProfile.bind(this));
 
+    // New
+    this.router.get("/BussinessProfilesNew", this.getAllBusinessProfilesNew.bind(this));
+    this.router.get("/BussinessProfilesbyidNew", this.getBusinessProfileByIdNew.bind(this));
+    this.router.put("/BussinessProfilesNew", this.updateBusinessProfileNew.bind(this));
+    this.router.post("/BussinessProfilesNew", this.createBusinessProfileNew.bind(this));
+
 
 
   }
@@ -654,7 +660,126 @@ export default class ServiceController {
     }
   }
 
+  // New
+  async createBusinessProfileNew(req: Request, res: Response) {
+    const apiName = "businessprofile/create";
+    const port = req.socket.localPort!;
+    const input = req.body;
+    const userId = req.headers["userid"] || "";
+    let connection;
 
+    try {
+      connection = await pool.getConnection();
+      await redis.del("all_bussiness");
+      await connection.beginTransaction();
+
+      const checkDup = "SELECT COUNT(BUSINESS_NAME) as count FROM BUSSINESS_PROFILE WHERE BUSINESS_NAME = ? AND MOBILE = ?";
+      const dupResult = await executeDbQuery(checkDup, [input.BUSINESS_NAME, input.MOBILE], true, apiName, port, connection);
+      if (Number(dupResult[0]?.count) > 0) {
+        await connection.rollback();
+        res.json({ status: 2, result: "Business Profile already exists." });
+        return;
+      }
+
+      const rows = await executeDbQuery("CALL Locate_GenerateBusinessId('B');", [], true, apiName, port, connection);
+
+      const newId = rows[0][0].newBusinessId;
+
+      const image_url1 = await uploadImage(input.IMAGE_URL1);
+      const image_url2 = await uploadImage(input.IMAGE_URL2);
+      const image_url3 = await uploadImage(input.IMAGE_URL3);
+
+      const insertQuery = `INSERT INTO BUSSINESS_PROFILE (CITY_ID, SERVICE_ID, SUB_SERVICE_ID, BUSINESS_ID, BUSINESS_NAME, OWNER_NAME, BUSINESS_TYPE, MOBILE, EMAIL, DESCRIPTION, LAND_MARK, AREA, IDENTITY_TYPE, IDENTITY_NUMBER, IDENTITY_DOC, IMAGE_URL1, IMAGE_URL2, IMAGE_URL3, IS_LOCATED, LATITUDE, LONGITUDE, WEEKDAY_TIMINGS, SUNDAY_TIMINGS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);`;
+
+      const params = ['101', input.SERVICE_ID, input.SUB_SERVICE_ID, newId, input.BUSINESS_NAME, input.OWNER_NAME, input.BUSINESS_TYPE, input.MOBILE, input.EMAIL, input.DESCRIPTION, input.LAND_MARK, input.AREA, input.IDENTITY_TYPE, input.IDENTITY_NUMBER, input.IDENTITY_DOC, image_url1, image_url2, image_url3, input.IS_LOCATED, input.LATITUDE, input.LONGITUDE, input.WEEKDAY_TIMINGS, input.SUNDAY_TIMINGS, userId];
+
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
+      await connection.commit();
+
+      res.json({ status: 0, result: { message: "Business Profile created", BussinessId: newId, affectedRows: result.affectedRows } });
+    } catch (err: any) {
+      if (connection) await connection.rollback();
+      res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
+  }
+
+  async getAllBusinessProfilesNew(req: Request, res: Response): Promise<void> {
+    const apiName = "businessprofile/read-all";
+    const port = req.socket.localPort!;
+    const cacheKey = "all_bussiness";
+
+    try {
+      const cachedData = await redis.get(cacheKey);
+      if (cachedData) {
+        res.json({ status: 0, result: JSON.parse(cachedData), cached: true });
+        return;
+      }
+      const query = `SELECT B.CITY_ID, B.BUSINESS_ID, B.BUSINESS_NAME, B.SERVICE_ID, S.NAME, B.SUB_SERVICE_ID, SB.NAME, B.OWNER_NAME, B.BUSINESS_TYPE, B.MOBILE, B.EMAIL, B.DESCRIPTION, B.LAND_MARK, B.AREA, B.IDENTITY_TYPE, B.IDENTITY_NUMBER, B.IDENTITY_DOC, B.IS_LOCATED, B.LATITUDE, B.LONGITUDE, B.WEEKDAY_TIMINGS, B.SUNDAY_TIMINGS, B.STATUS, B.CREATED_BY, DATE_FORMAT(B.CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, B.EDITED_BY, DATE_FORMAT(B.EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM BUSSINESS_PROFILE B LEFT JOIN SERVICES S ON B.SERVICE_ID = S.ID LEFT JOIN SUB_SERVICES SB ON SB.SUB_SERVICE_ID = B.SUB_SERVICE_ID ORDER BY BUSINESS_NAME`;
+
+      const rows = await executeDbQuery(query, [], false, apiName, port);
+
+      await redis.set(cacheKey, JSON.stringify(rows), "EX", 3600); // Cache for 1 hour
+
+      // res.json({ status: 0, result: rows });
+      const cached = await redis.get("all_bussiness");
+      if (cached) {
+        console.log("Redis cache hit");
+        res.json({ status: 0, result: JSON.parse(cached) });
+        return;
+      }
+    } catch (err: any) {
+      res.json({ status: 1, result: err.toString() });
+    }
+  }
+
+  async getBusinessProfileByIdNew(req: Request, res: Response) {
+    const apiName = "businessprofile/read";
+    const port = req.socket.localPort!;
+    const BusinessId = req.query.id || "";
+
+    const query = `SELECT B.CITY_ID, B.BUSINESS_ID, B.BUSINESS_NAME, B.SERVICE_ID, S.NAME, B.SUB_SERVICE_ID, SB.NAME, B.OWNER_NAME, B.BUSINESS_TYPE, B.MOBILE, B.EMAIL, B.DESCRIPTION, B.LAND_MARK, B.AREA, B.IDENTITY_TYPE, B.IDENTITY_NUMBER, B.IDENTITY_DOC, B.IS_LOCATED, B.LATITUDE, B.LONGITUDE, B.WEEKDAY_TIMINGS, B.SUNDAY_TIMINGS, B.STATUS, B.CREATED_BY, DATE_FORMAT(B.CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, B.EDITED_BY, DATE_FORMAT(B.EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM BUSSINESS_PROFILE B LEFT JOIN SERVICES S ON B.SERVICE_ID = S.ID LEFT JOIN SUB_SERVICES SB ON SB.SUB_SERVICE_ID = B.SUB_SERVICE_ID WHERE B.BUSINESS_ID = ?`;
+
+    try {
+      const rows = await executeDbQuery(query, [BusinessId], false, apiName, port);
+      res.json({ status: 0, result: rows });
+    } catch (err: any) {
+      res.json({ status: 1, result: err.toString() });
+    }
+  }
+
+  async updateBusinessProfileNew(req: Request, res: Response) {
+    const apiName = "businessprofile/update";
+    const port = req.socket.localPort!;
+    const input = req.body;
+    const userId = req.headers["userid"] || "";
+    let connection: any;
+
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+      await redis.del("all_bussiness");
+
+      const image_url1 = await uploadImage(input.IMAGE_URL1);
+      const image_url2 = await uploadImage(input.IMAGE_URL2);
+      const image_url3 = await uploadImage(input.IMAGE_URL3);
+
+      const query = ` UPDATE BUSSINESS_PROFILE SET CITY_ID = ?, SERVICE_ID = ?, SUB_SERVICE_ID = ?,BUSINESS_NAME = ?, OWNER_NAME = ?, BUSINESS_TYPE = ?, MOBILE = ?, EMAIL = ?, DESCRIPTION = ?, LAND_MARK = ?, AREA = ?, IDENTITY_TYPE = ?, IDENTITY_NUMBER = ?, IDENTITY_DOC = ?, IMAGE_URL1 = ?, IMAGE_URL2 = ?, IMAGE_URL3 = ?, IS_LOCATED = ?, LATITUDE = ?, LONGITUDE = ?, WEEKDAY_TIMINGS = ?, SUNDAY_TIMINGS = ?, STATUS = ?, EDITED_BY = ?, EDITED_ON = NOW() WHERE BUSINESS_ID = ?;`;
+
+      const params = [input.CITY_ID || '101', input.SERVICE_ID, input.SUB_SERVICE_ID, input.BUSINESS_NAME, input.OWNER_NAME, input.BUSINESS_TYPE, input.MOBILE, input.EMAIL, input.DESCRIPTION, input.LAND_MARK, input.AREA, input.IDENTITY_TYPE, input.IDENTITY_NUMBER, input.IDENTITY_DOC, image_url1, image_url2, image_url3, input.IS_LOCATED, input.LATITUDE, input.LONGITUDE, input.WEEKDAY_TIMINGS, input.SUNDAY_TIMINGS, input.STATUS, userId, input.BUSINESS_ID];
+
+      const result = await executeDbQuery(query, params, true, apiName, port);
+      await connection.commit();
+
+      res.json({ status: 0, result: { message: "Business Profile updated" } });
+    } catch (err: any) {
+      if (connection) await connection.rollback();
+      res.json({ status: 1, error: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
+  }
 
 
 }
