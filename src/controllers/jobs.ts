@@ -9,6 +9,7 @@ export default class JobsController {
     app.use("/api/jobs", this.router);
     // Endpoints:
     this.router.get("/job", this.getAllJobs.bind(this));
+    this.router.get("/jobRequiremnt", this.getRequiremntJobs.bind(this));
     this.router.get("/jobbyid", this.getJobById.bind(this));
     this.router.put("/job", this.updateJob.bind(this));
     this.router.post("/job", this.createJob.bind(this));
@@ -63,6 +64,18 @@ export default class JobsController {
     const apiName = "job/read-all";
     const port = req.socket.localPort!;
     const query = ` SELECT CITY_ID, JOB_ID, JOB_TITLE, DESCRIPTION, JOB_TYPE, EXPERIENCE, SKILLS, LAST_DATE, COMP_NM, MOBILE, EMAIL, WEBSITE, PACKAGE, COMP_ADDRESS, APPLY_THROUGH, STATUS, IMAGE_URL, CREATED_BY, DATE_FORMAT(CREATED_ON, '%d/%m/%Y %H:%i') AS CREATED_ON, EDITED_BY, DATE_FORMAT(EDITED_ON, '%d/%m/%Y %H:%i') AS EDITED_ON FROM JOBS `;
+    try {
+      const rows = await executeDbQuery(query, [], false, apiName, port);
+      res.json({ status: 0, result: rows });
+    } catch (err: any) {
+      res.json({ status: 1, result: err.toString() });
+    }
+  }
+
+  async getRequiremntJobs(req: Request, res: Response): Promise<void> {
+    const apiName = "job/read-all";
+    const port = req.socket.localPort!;
+    const query = ` SELECT IMAGE_URL, JOB_ID, isQuickRequirement FROM JOBS ORDER BY CREATED_ON DESC `;
     try {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, result: rows });
