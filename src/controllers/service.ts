@@ -406,8 +406,8 @@ export default class ServiceController {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      const updateQuery = `UPDATE SERVICES SET isExplored = ? where ID = ?`;
-      const params = [input.isExplored, input.ServiceID];
+      const updateQuery = `UPDATE SERVICES SET isExplored = ?, EDITED_BY =? WHERE ID = ?`;
+      const params = [input.isExplored ? "true" : "false", userId, input.ServiceID];
       await executeDbQuery(updateQuery, params, true, apiName, port, connection);
       await connection.commit();
       const results = { message: "Explore Service Updated" };

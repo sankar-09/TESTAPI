@@ -137,8 +137,8 @@ export default class JobsController {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      const updateQuery = `UPDATE JOBS SET isQuickRequirement = ? where JOB_ID = ?`;
-      const params = [input.isQuickRequirement, input.jobId];
+      const updateQuery = `UPDATE JOBS SET isQuickRequirement = ?, EDITED_BY = ? where JOB_ID = ?`;
+      const params = [input.isQuickRequirement ? "true" : "false", userId, input.jobId];
       await executeDbQuery(updateQuery, params, true, apiName, port, connection);
       await connection.commit();
       const results = { message: "Quick Requirements Updated" };
