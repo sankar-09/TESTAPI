@@ -12,6 +12,7 @@ export default class NewsFeedController {
     this.router.get("/newsfeeds", this.getAllNewsFeeds.bind(this));
     this.router.get("/newsfeedbyid", this.getNewsFeedById.bind(this));
     this.router.put("/newsfeeds", this.updateNewsFeed.bind(this));
+    this.router.put("/acceptFeed", this.acceptFeed.bind(this));
     this.router.post("/newsfeeds", this.createNewsFeed.bind(this));
   }
 
@@ -105,6 +106,29 @@ export default class NewsFeedController {
     try {
       const result = await executeDbQuery(updateQuery, params, true, apiName, port);
       const results = {message: "News feed updated"};
+      res.json({ status: 0, result:results });
+    } catch (err: any) {
+      res.json({ status: 1, result: err.toString() });
+    }
+  }
+
+  async acceptFeed(req: Request, res: Response) {
+    const apiName = "newsfeed/accept";
+    const port = req.socket.localPort!;
+    const userId = req.headers["userid"] || "";
+    
+    const input = req.body;
+     let connection: any;
+   
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const updateQuery = `UPDATE NEWS_FEED SET STATUS='A', ACCEPTED_BY=? WHERE FEED_ID=?`;
+    const params = [userId, input.feedId];
+
+    try {
+      const result = await executeDbQuery(updateQuery, params, true, apiName, port);
+      const results = {message: "News feed accepted"};
       res.json({ status: 0, result:results });
     } catch (err: any) {
       res.json({ status: 1, result: err.toString() });

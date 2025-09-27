@@ -73,9 +73,9 @@ export default class JobsController {
   }
 
   async getRequiremntJobs(req: Request, res: Response): Promise<void> {
-    const apiName = "job/read-all";
+    const apiName = "job/requirements";
     const port = req.socket.localPort!;
-    const query = ` SELECT IMAGE_URL, JOB_ID, isQuickRequirement FROM JOBS ORDER BY CREATED_ON DESC `;
+    const query = ` SELECT IMAGE_URL, JOB_ID, JOB_TITLE, isQuickRequirement FROM JOBS ORDER BY CREATED_ON DESC `;
     try {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, result: rows });
