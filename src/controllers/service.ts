@@ -15,6 +15,7 @@ export default class ServiceController {
     this.router.get("/exploreServices", this.getExploreServices.bind(this));
     this.router.get("/servicesbyid", this.getServiceById.bind(this));
     this.router.put("/services", this.updateService.bind(this));
+    this.router.put("/exploreServices", this.updateExploreService.bind(this));
     this.router.post("/services", this.createService.bind(this));
     this.router.post("/explore-services", this.createExploreService.bind(this));
 
@@ -395,6 +396,29 @@ export default class ServiceController {
     }
   }
 
+  async updateExploreService(req: Request, res: Response): Promise<void> {
+    const apiName = "exploreService/update";
+    const port = req.socket.localPort!;
+    const userId = req.headers["userid"] || "";
+    const input = req.body;
+    let connection: any;
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const updateQuery = `UPDATE SERVICES SET isExplored = ? where ID = ?`;
+      const params = [input.isExplored, input.ServiceID];
+      await executeDbQuery(updateQuery, params, true, apiName, port, connection);
+      await connection.commit();
+      const results = { message: "Explore Service Updated" };
+      res.json({ status: 0, result: results });
+    } catch (err: any) {
+      if (connection) await connection.rollback();
+      res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
+  }
   // async updateService(req: Request, res: Response) {
   //   const apiName = "service/update";
   //   const port = req.socket.localPort!;

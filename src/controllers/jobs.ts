@@ -12,6 +12,7 @@ export default class JobsController {
     this.router.get("/jobRequiremnt", this.getRequiremntJobs.bind(this));
     this.router.get("/jobbyid", this.getJobById.bind(this));
     this.router.put("/job", this.updateJob.bind(this));
+    this.router.put("/jobRequiremnt", this.updateQuickRequirement.bind(this));
     this.router.post("/job", this.createJob.bind(this));
   }
 
@@ -117,6 +118,30 @@ export default class JobsController {
       await executeDbQuery(updateQuery, params, true, apiName, port, connection);
       await connection.commit();
       const results = {message: "Job updated"};
+      res.json({ status: 0, result: results });
+    } catch (err: any) {
+      if (connection) await connection.rollback();
+      res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
+  }
+
+  async updateQuickRequirement(req: Request, res: Response): Promise<void> {
+    const apiName = "jobQuickRequirement/update";
+    const port = req.socket.localPort!;
+    const userId = req.headers["userid"] || "";
+    const input = req.body;
+    let connection: any;
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const updateQuery = `UPDATE JOBS SET isQuickRequirement = ? where JOB_ID = ?`;
+      const params = [input.isQuickRequirement, input.jobId];
+      await executeDbQuery(updateQuery, params, true, apiName, port, connection);
+      await connection.commit();
+      const results = { message: "Quick Requirements Updated" };
       res.json({ status: 0, result: results });
     } catch (err: any) {
       if (connection) await connection.rollback();
