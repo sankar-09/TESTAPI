@@ -444,8 +444,8 @@ export default class MobileAppServices {
       await connection.beginTransaction();
 
       // 1. Check if user exists in USERS
-      const checkUser = `SELECT USER_ID FROM USERS WHERE EMAIL=? OR MOBILE_NUMBER=? LIMIT 1`;
-      const existingUser = await executeDbQuery(checkUser, [input.EMAIL, input.MOBILE_NUMBER], true, apiName, port, connection);
+      const checkUser = `SELECT USER_ID FROM USERS WHERE MOBILE_NUMBER=? LIMIT 1`;
+      const existingUser = await executeDbQuery(checkUser, [input.MOBILE_NUMBER], true, apiName, port, connection);
 
       let userId: string;
 
@@ -458,16 +458,18 @@ export default class MobileAppServices {
         userId = idRows[0]?.newUserId;
 
         // 3. Insert into USERS
-        const insertUser = `INSERT INTO USERS (USER_ID, MOBILE_NUMBER, EMAIL, STATUS) VALUES (?, ?, ?, 'A')`;
-        await executeDbQuery(insertUser, [userId, input.MOBILE_NUMBER, input.EMAIL], true, apiName, port, connection);
+        const insertUser = `INSERT INTO USERS (USER_ID, MOBILE_NUMBER, STATUS) VALUES (?, ?, 'A')`;
+        await executeDbQuery(insertUser, [userId, input.MOBILE_NUMBER], true, apiName, port, connection);
       }
 
       // 4. Generate OTP
       const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
       // 5. Upsert into OTP_SERVICES
-      const upsertQuery = ` INSERT INTO OTP_SERVICES (USER_ID, MOBILE_NUMBER, EMAIL, OTP_CODE, OTP_CREATED_AT, STATUS) VALUES (?, ?, ?, ?, NOW(), 'A') ON DUPLICATE KEY UPDATE  OTP_CODE=VALUES(OTP_CODE), OTP_CREATED_AT=NOW(), OTP_USED_AT=NULL, UPDATED_ON=NOW() `;
-      await executeDbQuery(upsertQuery, [userId, input.MOBILE_NUMBER, input.EMAIL, otp], true, apiName, port, connection);
+      const upsertQuery = `INSERT INTO OTP_SERVICES (USER_ID, MOBILE_NUMBER, OTP_CODE, OTP_CREATED_AT, STATUS) VALUES (?, ?, ?, NOW(), 'A') ON DUPLICATE KEY UPDATE OTP_CODE=VALUES(OTP_CODE), OTP_CREATED_AT=NOW(), OTP_USED_AT=NULL, UPDATED_ON=NOW()`;
+
+      await executeDbQuery(upsertQuery, [userId, input.MOBILE_NUMBER, otp], true, apiName, port, connection);
+
 
       await connection.commit();
 
