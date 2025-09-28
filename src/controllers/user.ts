@@ -57,6 +57,10 @@ class UserController {
   //     Response.json({ status: 1, result: err.toString()});
   //   }
   // }
+
+
+
+
   refreshToken(req: Request, res: Response) {
     const refreshToken = req.body?.refreshToken;
 
@@ -146,7 +150,7 @@ class UserController {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      const users = await executeDbQuery( `SELECT USER_ID, EMAIL FROM MOBILE_USERS WHERE MOBILE_NUMBER = ? AND STATUS='A'`, [input.MOBILE_NUMBER], true, apiName, port, connection );
+      const users = await executeDbQuery(`SELECT USER_ID, EMAIL FROM MOBILE_USERS WHERE MOBILE_NUMBER = ? AND STATUS='A'`, [input.MOBILE_NUMBER], true, apiName, port, connection);
 
       if (!users.length) {
         await connection.rollback();
@@ -156,9 +160,9 @@ class UserController {
 
       const userId = users[0].USER_ID;
 
-      const { otp, expiresAt } = await generateAndStoreOtp( input.MOBILE_NUMBER, OTP_TTL_MIN );
+      const { otp, expiresAt } = await generateAndStoreOtp(input.MOBILE_NUMBER, OTP_TTL_MIN);
 
-      await executeDbQuery( `INSERT INTO MOBILE_OTPS (MOBILE_NUMBER, OTP_CODE, EXPIRES_AT, CREATED_AT) VALUES (?,?,?,NOW())`, [input.MOBILE_NUMBER, otp, expiresAt], true, apiName, port, connection );
+      await executeDbQuery(`INSERT INTO MOBILE_OTPS (MOBILE_NUMBER, OTP_CODE, EXPIRES_AT, CREATED_AT) VALUES (?,?,?,NOW())`, [input.MOBILE_NUMBER, otp, expiresAt], true, apiName, port, connection);
 
       await connection.commit();
 
@@ -172,7 +176,7 @@ class UserController {
     }
   }
 
-  async loginVerifyOtp(req: Request, res: Response): Promise<void> {
+  async loginVerifyOtp1(req: Request, res: Response): Promise<void> {
     const apiName = "user/verifyOtp";
     const port: number = req.socket.localPort!;
     const input = req.body;
@@ -316,7 +320,7 @@ class UserController {
     }
   }
 
-  async createMobileUser(req: Request, res: Response) {
+  async createMobileUser1(req: Request, res: Response) {
     const apiName = "mobileUser/create";
     const port: number = req.socket.localPort!;
     const userId = req.headers["userid"] || "";
@@ -354,7 +358,6 @@ class UserController {
       if (connection) connection.release();
     }
   }
-
 
   async getAllUsers(req: Request, res: Response) {
     const apiName = "user/read-all";
@@ -566,6 +569,88 @@ class UserController {
       res.json({ status: 1, error: err.toString() });
     }
   }
+
+  async createMobileUser(req: Request, res: Response) {
+    const apiName = "mobileUser/create";
+    const port: number = req.socket.localPort!;
+    const input = req.body;
+    let connection;
+
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      // 1. Check if user exists in USERS
+      const checkUser = `SELECT USER_ID FROM USERS WHERE EMAIL=? OR MOBILE_NUMBER=? LIMIT 1`;
+      const existingUser = await executeDbQuery(checkUser, [input.EMAIL, input.MOBILE_NUMBER], true, apiName, port, connection);
+
+      let userId: string;
+
+      if (existingUser.length > 0) {
+        userId = existingUser[0].USER_ID;
+      } else {
+        // 2. Generate new userId
+        await executeDbQuery("CALL GenerateUserId(@id)", [], false, apiName, port, connection);
+        const idRows = await executeDbQuery("SELECT @id as newUserId", [], false, apiName, port, connection);
+        userId = idRows[0]?.newUserId;
+
+        // 3. Insert into USERS
+        const insertUser = `INSERT INTO USERS (USER_ID, MOBILE_NUMBER, EMAIL, STATUS) VALUES (?, ?, ?, 'A')`;
+        await executeDbQuery(insertUser, [userId, input.MOBILE_NUMBER, input.EMAIL], true, apiName, port, connection);
+      }
+
+      // 4. Generate OTP
+      const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+      // 5. Upsert into OTP_SERVICES
+      const upsertQuery = ` INSERT INTO OTP_SERVICES (USER_ID, MOBILE_NUMBER, EMAIL, OTP_CODE, OTP_CREATED_AT, STATUS) VALUES (?, ?, ?, ?, NOW(), 'A') ON DUPLICATE KEY UPDATE  OTP_CODE=VALUES(OTP_CODE), OTP_CREATED_AT=NOW(), OTP_USED_AT=NULL, UPDATED_ON=NOW() `;
+      await executeDbQuery(upsertQuery, [userId, input.MOBILE_NUMBER, input.EMAIL, otp], true, apiName, port, connection);
+
+      await connection.commit();
+
+      // 6. Send OTP (pseudo)
+      // await smsService.send(input.MOBILE_NUMBER, `Your OTP is ${otp}`);
+
+      res.json({ status: 0, result: { message: "OTP sent", userId, OTP: otp } });
+
+    } catch (err: any) {
+      if (connection) await connection.rollback();
+      res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
+  }
+
+  async loginVerifyOtp(req: Request, res: Response) {
+    const apiName = "otp/verify";
+    const port: number = req.socket.localPort!;
+    const input = req.body;
+    let connection;
+
+    try {
+      connection = await pool.getConnection();
+
+      const query = ` SELECT USER_ID FROM OTP_SERVICES WHERE MOBILE_NUMBER=? AND OTP_CODE=? AND OTP_USED_AT IS NULL AND OTP_CREATED_AT >= NOW() - INTERVAL 5 MINUTE LIMIT 1 `;
+      const rows = await executeDbQuery(query, [input.MOBILE_NUMBER, input.OTP], true, apiName, port, connection);
+
+      if (rows.length === 0) {
+        res.json({ status: 2, result: "Invalid or expired OTP" });
+        return;
+      }
+
+      // Mark OTP as used
+      await executeDbQuery("UPDATE OTP_SERVICES SET OTP_USED_AT=NOW(), UPDATED_ON=NOW() WHERE MOBILE_NUMBER=?", [input.MOBILE_NUMBER], true, apiName, port, connection);
+
+      res.json({ status: 0, result: { message: "Login successful", userId: rows[0].USER_ID } });
+
+    } catch (err: any) {
+      res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
+  }
+
+
 }
 
 export default UserController;
