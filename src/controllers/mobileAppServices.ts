@@ -43,8 +43,8 @@ export default class MobileAppServices {
 
     this.router.post("/users", this.createUser.bind(this));
     this.router.post("/login", this.Login.bind(this));
-    this.router.post("/mobileUsers", this.createMobileUser.bind(this));
-    this.router.post("/mobileLogin", this.loginVerifyOtp.bind(this))
+    this.router.post("/mobileLogin", this.createMobileUser.bind(this));
+    this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this))
     this.router.put("/resetpass", this.resetPass.bind(this));
 
   }
