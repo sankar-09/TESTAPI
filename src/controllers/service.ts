@@ -722,7 +722,7 @@ export default class ServiceController {
 
       await redis.set(cacheKey, JSON.stringify(rows), "EX", 3600); // Cache for 1 hour
 
-      // res.json({ status: 0, result: rows });
+      res.json({ status: 0, result: rows });
       const cached = await redis.get("all_bussiness");
       if (cached) {
         console.log("Redis cache hit");
