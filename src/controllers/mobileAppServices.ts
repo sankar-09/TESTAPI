@@ -37,13 +37,12 @@ export default class MobileAppServices {
     this.router.get("/bussinessprofilesByBSids", this.getbussinessByBSids.bind(this)); // old
     this.router.get("/adds", this.getAdds.bind(this));
     this.router.get("/addByid", this.getAddByid.bind(this));
-    this.router.get("/locations", this.getLocations.bind(this));
-    this.router.get("/locationByid", this.getLocationByid.bind(this));
+    this.router.get("/nearLocations", this.getLocations.bind(this));
+    this.router.get("/nearLocationByid", this.getLocationByid.bind(this));
 
-
-    this.router.get("/userLocation", this.getUserLocation.bind(this))
-    this.router.post("/userLocation", this.createUserLocation.bind(this))
-    this.router.post("/users", this.createUser.bind(this));
+    this.router.get("/location", this.getUserLocation.bind(this))
+    this.router.post("/location", this.createUserLocation.bind(this))
+    this.router.post("/signup", this.createUser.bind(this));
     this.router.post("/login", this.Login.bind(this));
     this.router.post("/mobileLogin", this.createMobileUser.bind(this));
     this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this))
@@ -62,12 +61,19 @@ export default class MobileAppServices {
       connection = await pool.getConnection();
       await connection.beginTransaction();
 
-      // Check for duplicate employee (by EMAIL and MOBILE_NUMBER)
-      const checkDup = `SELECT COUNT(EMAIL) as count FROM SECURITY_LOGIN WHERE EMAIL = ?`;
-      const dupdata = await executeDbQuery(checkDup, [input.EMAIL], false, apiName, port, connection);
-      if (Number(dupdata[0]?.count) > 0) {
+
+      const mobileRegex = /^[6-9]\d{9}$/;
+      if (!input.MOBILE || !mobileRegex.test(input.MOBILE)) {
         await connection.rollback();
-        res.json({ status: 2, data: "User already exists." });
+        res.json({ status: 2, data: "Invalid mobile number format." });
+        return;
+      }
+
+      const checkMobile = await executeDbQuery("SELECT COUNT(MOBILE) as count FROM SECURITY_LOGIN WHERE MOBILE = ?", [input.MOBILE], true, apiName, port, connection);
+
+      if (Number(checkMobile[0]?.count) > 0) {
+        await connection.rollback();
+        res.json({ status: 2, data: "Mobile number already exists." });
         return;
       }
 
