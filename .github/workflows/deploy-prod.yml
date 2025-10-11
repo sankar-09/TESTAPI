@@ -18,6 +18,7 @@ env:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Code
         uses: actions/checkout@v3
@@ -74,7 +75,8 @@ jobs:
               sudo docker run -d --name redis-instance --network app-network --restart always -p 6379:6379 redis:alpine
             fi
 
-            echo "Cleaning up old API container..."
+            echo "Cleaning up old API containers or anything bound to port 3000..."
+            sudo docker ps --filter "publish=3000" -q | xargs -r sudo docker rm -f || true
             sudo docker stop api || true
             sudo docker rm api || true
 
