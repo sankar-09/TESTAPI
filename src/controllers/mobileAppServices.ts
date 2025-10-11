@@ -40,12 +40,13 @@ export default class MobileAppServices {
     this.router.get("/nearLocations", this.getLocations.bind(this));
     this.router.get("/nearLocationByid", this.getLocationByid.bind(this));
 
-    this.router.get("/location", this.getUserLocation.bind(this))
-    this.router.post("/location", this.createUserLocation.bind(this))
+    this.router.get("/location", this.getUserLocation.bind(this));
+    this.router.get("/user", this.getUserProfile.bind(this));
+    this.router.post("/location", this.createUserLocation.bind(this));
     this.router.post("/signup", this.createUser.bind(this));
     this.router.post("/login", this.Login.bind(this));
     this.router.post("/mobileLogin", this.createMobileUser.bind(this));
-    this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this))
+    this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this));
     this.router.put("/resetpass", this.resetPass.bind(this));
 
   }
@@ -450,7 +451,7 @@ export default class MobileAppServices {
       await connection.beginTransaction();
 
       // 1. Check if user exists in USERS
-      const checkUser = `SELECT USER_ID FROM USERS WHERE MOBILE_NUMBER=? LIMIT 1`;
+      const checkUser = `SELECT USER_ID FROM SECURITY_LOGIN WHERE MOBILE=? LIMIT 1`;
       const existingUser = await executeDbQuery(checkUser, [input.MOBILE_NUMBER], true, apiName, port, connection);
 
       let userId: string;
@@ -459,12 +460,11 @@ export default class MobileAppServices {
         userId = existingUser[0].USER_ID;
       } else {
         // 2. Generate new userId
-        await executeDbQuery("CALL GenerateUserId(@id)", [], false, apiName, port, connection);
-        const idRows = await executeDbQuery("SELECT @id as newUserId", [], false, apiName, port, connection);
-        userId = idRows[0]?.newUserId;
+        const idRows = await executeDbQuery("CALL GenerateLoginId(?)", ["MUSR"], false, apiName, port, connection);
+        userId = idRows[0][0].newId;
 
         // 3. Insert into USERS
-        const insertUser = `INSERT INTO USERS (USER_ID, MOBILE_NUMBER, STATUS) VALUES (?, ?, 'A')`;
+        const insertUser = `INSERT INTO SECURITY_LOGIN (USER_ID, MOBILE, STATUS) VALUES (?, ?, 'A')`;
         await executeDbQuery(insertUser, [userId, input.MOBILE_NUMBER], true, apiName, port, connection);
       }
 
@@ -571,5 +571,27 @@ export default class MobileAppServices {
       res.json({ status: 1, data: err.toString() });
     }
   }
+
+  async getUserProfile(req: Request, res: Response) {
+    const apiName = "userLocation/get";
+    const port = req.socket.localPort!;
+    const { id } = req.query;
+
+    let query = ` SELECT USER_ID AS userId, USERNAME AS userName, MOBILE AS mobile, EMAIL AS email FROM SECURITY_LOGIN WHERE STATUS = 'A' `;
+    const params: any[] = [];
+
+    if (id) {
+      query += " AND (MOBILE = ? OR USER_ID = ?)";
+      params.push(id, id);
+    }
+
+    try {
+      const rows = await executeDbQuery(query, params, false, apiName, port);
+      res.json({ status: 0, data: rows });
+    } catch (err: any) {
+      res.json({ status: 1, data: err.toString() });
+    }
+  }
+
 
 }
