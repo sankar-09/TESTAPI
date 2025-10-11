@@ -41,11 +41,12 @@ export default class MobileAppServices {
     this.router.get("/locationByid", this.getLocationByid.bind(this));
 
 
+    this.router.get("/userLocation", this.getUserLocation.bind(this))
+    this.router.post("/userLocation", this.createUserLocation.bind(this))
     this.router.post("/users", this.createUser.bind(this));
     this.router.post("/login", this.Login.bind(this));
     this.router.post("/mobileLogin", this.createMobileUser.bind(this));
     this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this))
-    this.router.post("/createLocation", this.createLocation.bind(this))
     this.router.put("/resetpass", this.resetPass.bind(this));
 
   }
@@ -70,13 +71,11 @@ export default class MobileAppServices {
         return;
       }
 
-      // Generate new Login ID
-      await executeDbQuery("CALL GenerateLoginId(@id)", [], false, apiName, port, connection);
-      const idRows = await executeDbQuery("SELECT @id as LoginId", [], false, apiName, port, connection);
-      const LoginId = idRows[0]?.LoginId;
+      const idRows = await executeDbQuery("CALL GenerateLoginId(?)", ["MUSR"], false, apiName, port, connection);
+      const LoginId = idRows[0][0].newId;
 
-      const insertQuery = `INSERT INTO SECURITY_LOGIN (CITY_ID, USER_ID, USERNAME, EMAIL, PASSWORD, LOCATION, STATUS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-      const params = ['101', LoginId, input.NAME, input.EMAIL, input.PASSWORD, input.LOCATION, 'A', userId];
+      const insertQuery = `INSERT INTO SECURITY_LOGIN (CITY_ID, USER_ID, USERNAME, EMAIL, MOBILE, LOCATION, STATUS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
+      const params = ['101', LoginId, input.NAME, input.EMAIL, input.MOBILE, input.LOCATION, 'A', userId];
       const data = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
       await connection.commit();
       res.json({
@@ -516,8 +515,8 @@ export default class MobileAppServices {
     }
   }
 
-  async createLocation(req: Request, res: Response) {
-    const apiName = "location/create";
+  async createUserLocation(req: Request, res: Response) {
+    const apiName = "userLocation/create";
     const port = req.socket.localPort!;
     let input = req.body;
     const userId = req.headers["userid"] || "";
@@ -554,5 +553,17 @@ export default class MobileAppServices {
     }
   }
 
+  async getUserLocation(req: Request, res: Response) {
+    const apiName = "userLocation/get";
+    const port = req.socket.localPort!;
+    const query = `SELECT ID id, NAME name from LOCATIONS where STATUS='A' ORDER by NAME`;
+
+    try {
+      const rows = await executeDbQuery(query, [], false, apiName, port);
+      res.json({ status: 0, data: rows });
+    } catch (err: any) {
+      res.json({ status: 1, data: err.toString() });
+    }
+  }
 
 }
