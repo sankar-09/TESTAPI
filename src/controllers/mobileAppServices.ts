@@ -45,6 +45,7 @@ export default class MobileAppServices {
     this.router.post("/login", this.Login.bind(this));
     this.router.post("/mobileLogin", this.createMobileUser.bind(this));
     this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this))
+    this.router.post("/createLocation", this.createLocation.bind(this))
     this.router.put("/resetpass", this.resetPass.bind(this));
 
   }
@@ -514,5 +515,44 @@ export default class MobileAppServices {
       if (connection) connection.release();
     }
   }
+
+  async createLocation(req: Request, res: Response) {
+    const apiName = "location/create";
+    const port = req.socket.localPort!;
+    let input = req.body;
+    const userId = req.headers["userid"] || "";
+    let connection;
+
+    try {
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+
+      const checkDup = await executeDbQuery("SELECT COUNT(NAME) as count FROM LOCATIONS WHERE NAME = ?", [input.NAME], true, apiName, port, connection);
+
+      if (Number(checkDup[0]?.count) > 0) {
+        await connection.rollback();
+        res.json({ status: 2, data: "Location already exists." });
+        return;
+      }
+
+      const locRows = await executeDbQuery("CALL GenerateLocationId('LOC')", [], true, apiName, port, connection);
+      const newId = locRows[0][0].newLocationId;
+
+      const insertQuery = "INSERT INTO LOCATIONS (ID, NAME, STATUS) VALUES (?, ?, ?)";
+      const params = [newId, input.NAME, input.STATUS || "A"];
+
+      const result = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
+
+      await connection.commit();
+
+      res.json({ status: 0, data: { message: "Location created", locationId: newId, }, });
+    } catch (err: any) {
+      if (connection) await connection.rollback();
+      res.json({ status: 1, result: err.toString() });
+    } finally {
+      if (connection) connection.release();
+    }
+  }
+
 
 }
