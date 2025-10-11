@@ -4,6 +4,8 @@ import { promises } from "dns";
 import { executeDbQuery, pool } from "../db";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/emailservice";
+import { randomBytes } from "crypto";
+const crypto = require("crypto");
 
 const secretKey = process.env.ACCESS_TOKEN_KEY || 'Y6u$3vZq!7LqFg#29xVrE!8TmQpLuR1C';
 const secretKeyRefresh = process.env.REFRESH_TOKEN_KEY || 'J9p@WmZx*3BtRh$12qNsTy^Xz7KvOc5D';
@@ -45,6 +47,7 @@ export default class MobileAppServices {
     this.router.post("/location", this.createUserLocation.bind(this));
     this.router.post("/signup", this.createUser.bind(this));
     this.router.post("/login", this.Login.bind(this));
+    this.router.post("/signin/:mobileno", this.Signin.bind(this) as unknown as express.RequestHandler);
     this.router.post("/mobileLogin", this.createMobileUser.bind(this));
     this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this));
     this.router.put("/resetpass", this.resetPass.bind(this));
@@ -112,6 +115,59 @@ export default class MobileAppServices {
       }
     } catch (err: any) {
       Response.json({ status: 1, data: err.toString() });
+    }
+  }
+
+  async Signin(req: Request, res: Response) {
+    const apiName = "App/Login";
+    const { mobileno } = req.params;
+
+    const mobileRegex = /^[0-9]{10}$/;
+    if (!mobileRegex.test(mobileno)) {
+      return res.json({
+        status: 1, data: {
+          code: "AUTH_002",
+          message: "Invalid mobile number format",
+          details: "Mobile number must be exactly 10 digits.",
+          timestamp: formatTimestamp(new Date()),
+        },
+      });
+      
+    }
+
+    try {
+      let query = `SELECT USER_ID AS userId, USERNAME AS userName, MOBILE AS mobile, EMAIL AS email FROM SECURITY_LOGIN WHERE STATUS = 'A' AND MOBILE = ?`;
+
+      const rows = await executeDbQuery(query, [mobileno], false, apiName);
+
+      if (rows.length === 0) {
+        return res.json({
+          status: 1, data: {
+            code: "AUTH_001",
+            message: "Mobile number not registered",
+            details: "The provided mobile number is not associated with any existing account. Please create a new account to continue.",
+            timestamp: formatTimestamp(new Date()),
+          },
+        });
+        
+      }
+
+      const token = crypto.randomBytes(32).toString("hex");
+
+      return res.json({
+        status: 0,
+        data: { token },
+      });
+
+    } catch (err: any) {
+      return res.json({
+        status: 1, data: {
+          code: "AUTH_500",
+          message: "Internal server error",
+          details: err.toString(),
+          timestamp: formatTimestamp(new Date()),
+        },
+      });
     }
   }
 
@@ -594,4 +650,15 @@ export default class MobileAppServices {
   }
 
 
+}
+
+export function formatTimestamp(date: Date): string {
+  const dd = String(date.getDate()).padStart(2, "0");
+  const mm = String(date.getMonth() + 1).padStart(2, "0"); // Months are 0-based
+  const yyyy = date.getFullYear();
+
+  const HH = String(date.getHours()).padStart(2, "0");
+  const min = String(date.getMinutes()).padStart(2, "0");
+
+  return `${dd}/${mm}/${yyyy} ${HH}:${min}`;
 }
