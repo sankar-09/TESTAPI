@@ -42,12 +42,12 @@ export default class MobileAppServices {
     this.router.get("/nearLocations", this.getLocations.bind(this));
     this.router.get("/nearLocationByid", this.getLocationByid.bind(this));
 
+    this.router.get("/signin/:mobileno", this.Signin.bind(this) as unknown as express.RequestHandler);
     this.router.get("/location", this.getUserLocation.bind(this));
     this.router.get("/user", this.getUserProfile.bind(this));
     this.router.post("/location", this.createUserLocation.bind(this));
     this.router.post("/signup", this.createUser.bind(this));
     this.router.post("/login", this.Login.bind(this));
-    this.router.post("/signin/:mobileno", this.Signin.bind(this) as unknown as express.RequestHandler);
     this.router.post("/mobileLogin", this.createMobileUser.bind(this));
     this.router.post("/mobileOtpVerify", this.loginVerifyOtp.bind(this));
     this.router.put("/resetpass", this.resetPass.bind(this));
