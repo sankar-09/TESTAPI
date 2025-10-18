@@ -67,13 +67,13 @@ export default class MobileAppServices {
 
 
       const mobileRegex = /^[6-9]\d{9}$/;
-      if (!input.MOBILE || !mobileRegex.test(input.MOBILE)) {
+      if (!input.mobile || !mobileRegex.test(input.mobile)) {
         await connection.rollback();
-        res.json({ status: 2, data: "Invalid mobile number format." });
+        res.status(500).json({ status: 2, data: "Invalid mobile number format." });
         return;
       }
 
-      const checkMobile = await executeDbQuery("SELECT COUNT(MOBILE) as count FROM SECURITY_LOGIN WHERE MOBILE = ?", [input.MOBILE], true, apiName, port, connection);
+      const checkMobile = await executeDbQuery("SELECT COUNT(MOBILE) as count FROM SECURITY_LOGIN WHERE MOBILE = ?", [input.mobile], true, apiName, port, connection);
 
       if (Number(checkMobile[0]?.count) > 0) {
         await connection.rollback();
@@ -81,19 +81,19 @@ export default class MobileAppServices {
         return;
       }
 
-      const idRows = await executeDbQuery("CALL GenerateLoginId(?)", ["MUSR"], false, apiName, port, connection);
+      const idRows = await executeDbQuery("CALL GenerateLoginId(?)", ["MUSR"], true, apiName, port, connection);
       const LoginId = idRows[0][0].newId;
 
       const insertQuery = `INSERT INTO SECURITY_LOGIN (CITY_ID, USER_ID, USERNAME, EMAIL, MOBILE, LOCATION, STATUS, CREATED_BY) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`;
-      const params = ['101', LoginId, input.NAME, input.EMAIL, input.MOBILE, input.LOCATION, 'A', userId];
-      const data = await executeDbQuery(insertQuery, params, false, apiName, port, connection);
+      const params = ['101', LoginId, input.name, input.email, input.mobile, input.location, 'A', userId];
+      const data = await executeDbQuery(insertQuery, params, true, apiName, port, connection);
       await connection.commit();
       res.json({
         status: 0, data: { message: "User created", LoginId: LoginId, affectedRows: data.affectedRows, },
       });
     } catch (err: any) {
       if (connection) await connection.rollback();
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     } finally {
       if (connection) connection.release();
     }
@@ -114,7 +114,7 @@ export default class MobileAppServices {
         Response.json({ status: 2, data: { message: "user not found" } });
       }
     } catch (err: any) {
-      Response.json({ status: 1, data: err.toString() });
+      Response.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -124,7 +124,7 @@ export default class MobileAppServices {
 
     const mobileRegex = /^[0-9]{10}$/;
     if (!mobileRegex.test(mobileno)) {
-      return res.json({
+      return res.status(500).json({
         status: 1, data: {
           code: "AUTH_002",
           message: "Invalid mobile number format",
@@ -132,7 +132,7 @@ export default class MobileAppServices {
           timestamp: formatTimestamp(new Date()),
         },
       });
-      
+
     }
 
     try {
@@ -141,15 +141,15 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [mobileno], false, apiName);
 
       if (rows.length === 0) {
-        return res.json({
-          status: 1, data: {
+        return res.status(500).json({
+          status: 2, data: {
             code: "AUTH_001",
             message: "Mobile number not registered",
             details: "The provided mobile number is not associated with any existing account. Please create a new account to continue.",
             timestamp: formatTimestamp(new Date()),
           },
         });
-        
+
       }
 
       const token = crypto.randomBytes(32).toString("hex");
@@ -160,7 +160,7 @@ export default class MobileAppServices {
       });
 
     } catch (err: any) {
-      return res.json({
+      return res.status(500).json({
         status: 1, data: {
           code: "AUTH_500",
           message: "Internal server error",
@@ -195,7 +195,7 @@ export default class MobileAppServices {
       const datas = { message: "Password updated" }
       res.json({ status: 0, data: datas });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -208,7 +208,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -221,7 +221,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -234,7 +234,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -248,7 +248,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [ServiceId], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -264,7 +264,7 @@ export default class MobileAppServices {
       const rows1 = await executeDbQuery(query1, [], false, apiName, port);
       res.json({ status: 0, exploreServices: rows, services: rows1 });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -277,7 +277,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -294,7 +294,7 @@ export default class MobileAppServices {
 
       res.json({ status: 0, quickRequirements: rows1, newHiring: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -308,7 +308,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [JobId], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -321,7 +321,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -335,7 +335,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [ServiceId], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -359,7 +359,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, params, false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -373,7 +373,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [BusinessId], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -397,7 +397,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, perams, false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -421,7 +421,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, perams, false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -439,7 +439,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [SearchBy], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -452,7 +452,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -466,7 +466,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [AddId], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
   async getLocations(req: Request, res: Response) {
@@ -478,7 +478,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -492,7 +492,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [LocateId], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -542,7 +542,7 @@ export default class MobileAppServices {
 
     } catch (err: any) {
       if (connection) await connection.rollback();
-      res.json({ status: 1, result: err.toString() });
+      res.status(500).json({ status: 1, result: err.toString() });
     } finally {
       if (connection) connection.release();
     }
@@ -571,7 +571,7 @@ export default class MobileAppServices {
       res.json({ status: 0, result: { message: "Login successful", userId: rows[0].USER_ID } });
 
     } catch (err: any) {
-      res.json({ status: 1, result: err.toString() });
+      res.status(500).json({ status: 1, result: err.toString() });
     } finally {
       if (connection) connection.release();
     }
@@ -609,7 +609,7 @@ export default class MobileAppServices {
       res.json({ status: 0, data: { message: "Location created", locationId: newId, }, });
     } catch (err: any) {
       if (connection) await connection.rollback();
-      res.json({ status: 1, result: err.toString() });
+      res.status(500).json({ status: 1, result: err.toString() });
     } finally {
       if (connection) connection.release();
     }
@@ -624,7 +624,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, [], false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
@@ -645,7 +645,7 @@ export default class MobileAppServices {
       const rows = await executeDbQuery(query, params, false, apiName, port);
       res.json({ status: 0, data: rows });
     } catch (err: any) {
-      res.json({ status: 1, data: err.toString() });
+      res.status(500).json({ status: 1, data: err.toString() });
     }
   }
 
